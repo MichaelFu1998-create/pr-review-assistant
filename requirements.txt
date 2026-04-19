@@ -1,0 +1,5 @@
+openai>=1.40
+PyGithub>=2.0
+tiktoken>=0.7
+tenacity>=8.0
+requests>=2.31

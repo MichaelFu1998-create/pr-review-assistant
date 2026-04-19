@@ -1,0 +1,110 @@
+name: "PR Code Review"
+description: "Automated PR code review using LLM + static analysis tools. Supports multiple languages, review personas, and educational scoring."
+branding:
+  icon: "check-circle"
+  color: "blue"
+
+inputs:
+  # --- Required ---
+  openai_api_key:
+    description: "OpenAI API Key (or Anthropic key if using llm_provider: anthropic)"
+    required: true
+  github_token:
+    description: "GitHub API Token with PR read/write permissions"
+    required: true
+  github_pr_id:
+    description: "GitHub PR number to review"
+    required: true
+
+  # --- LLM Settings ---
+  openai_model:
+    description: "LLM model name (e.g., gpt-5.4-mini-2026-03-17, gpt-5-nano, claude-sonnet-4-6)"
+    required: false
+    default: "gpt-5.4-mini-2026-03-17"
+  openai_temperature:
+    description: "Sampling temperature [0, 1]. Higher values = more creative reviews."
+    required: false
+    default: "1"
+  openai_max_tokens:
+    description: "Maximum tokens in the LLM response."
+    required: false
+    default: "32000"
+  llm_provider:
+    description: "LLM provider: openai, anthropic, or openai (with api_base_url for compatible APIs)"
+    required: false
+    default: "openai"
+  api_base_url:
+    description: "Custom API base URL for OpenAI-compatible APIs (Ollama, vLLM, Azure, etc.)"
+    required: false
+    default: ""
+  anthropic_api_key:
+    description: "Anthropic API Key (required when llm_provider is 'anthropic')"
+    required: false
+    default: ""
+
+  # --- File Filtering ---
+  files:
+    description: "Comma-separated glob patterns for files to review (e.g., '*.py,src/*.ts')"
+    required: false
+    default: "*"
+  max_files:
+    description: "Maximum number of files to review per PR"
+    required: false
+    default: "10"
+
+  # --- Static Analysis Tools ---
+  tools:
+    description: "Tools to run: 'auto' (detect from tech stack), 'none' (LLM only), or comma-separated list (e.g., 'semgrep,ruff,eslint')"
+    required: false
+    default: "auto"
+  severity_threshold:
+    description: "Minimum severity to report from tools: critical, high, medium, low, info"
+    required: false
+    default: "low"
+
+  # --- Review Settings ---
+  review_focus:
+    description: "Review focus areas: security, quality, performance, education, all"
+    required: false
+    default: "all"
+  review_persona:
+    description: "Review style: mentor (educational), strict (thorough), concise (brief), security-auditor"
+    required: false
+    default: "mentor"
+  custom_instructions:
+    description: "Additional instructions for the LLM reviewer (e.g., 'We use Django REST Framework')"
+    required: false
+    default: ""
+  enable_scoring:
+    description: "Enable educational scoring rubric (true/false). Adds a 0-25 score to each review."
+    required: false
+    default: "false"
+
+  # --- System ---
+  logging:
+    description: "Log level: debug, info, warning, error"
+    required: false
+    default: "warning"
+
+runs:
+  using: "docker"
+  image: "Dockerfile"
+  env:
+    INPUT_OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+    INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}
+    INPUT_GITHUB_PR_ID: ${{ inputs.github_pr_id }}
+    INPUT_OPENAI_MODEL: ${{ inputs.openai_model }}
+    INPUT_OPENAI_TEMPERATURE: ${{ inputs.openai_temperature }}
+    INPUT_OPENAI_MAX_TOKENS: ${{ inputs.openai_max_tokens }}
+    INPUT_LLM_PROVIDER: ${{ inputs.llm_provider }}
+    INPUT_API_BASE_URL: ${{ inputs.api_base_url }}
+    INPUT_ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+    INPUT_FILES: ${{ inputs.files }}
+    INPUT_MAX_FILES: ${{ inputs.max_files }}
+    INPUT_TOOLS: ${{ inputs.tools }}
+    INPUT_SEVERITY_THRESHOLD: ${{ inputs.severity_threshold }}
+    INPUT_REVIEW_FOCUS: ${{ inputs.review_focus }}
+    INPUT_REVIEW_PERSONA: ${{ inputs.review_persona }}
+    INPUT_CUSTOM_INSTRUCTIONS: ${{ inputs.custom_instructions }}
+    INPUT_ENABLE_SCORING: ${{ inputs.enable_scoring }}
+    INPUT_LOGGING: ${{ inputs.logging }}
