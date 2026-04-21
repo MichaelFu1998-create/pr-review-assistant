@@ -1,5 +1,5 @@
 name: "PR Code Review"
-description: "Automated PR code review using LLM + static analysis tools. Supports multiple languages, review personas, and educational scoring."
+description: "LLM‑powered PR reviews with static analysis, multi‑language support, personas, and learning‑oriented scoring."
 branding:
   icon: "check-circle"
   color: "blue"
