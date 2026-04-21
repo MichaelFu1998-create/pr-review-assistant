@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: MichaelFu1998-create/pr-review-assistant@v1
+      - uses: MichaelFu1998-create/pr-review-assistant@v1.0.0
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -170,7 +170,7 @@ openai_model: "llama3"
 ### Python + Security Focus
 
 ```yaml
-- uses: MichaelFu1998-create/pr-review-assistant@v1
+- uses: MichaelFu1998-create/pr-review-assistant@v1.0.0
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
     github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -184,7 +184,7 @@ openai_model: "llama3"
 ### Full-Stack JS/TS
 
 ```yaml
-- uses: MichaelFu1998-create/pr-review-assistant@v1
+- uses: MichaelFu1998-create/pr-review-assistant@v1.0.0
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
     github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -196,7 +196,7 @@ openai_model: "llama3"
 ### Capstone Course (with scoring)
 
 ```yaml
-- uses: MichaelFu1998-create/pr-review-assistant@v1
+- uses: MichaelFu1998-create/pr-review-assistant@v1.0.0
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
     github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -209,7 +209,7 @@ openai_model: "llama3"
 ### LLM-Only Review (no tools)
 
 ```yaml
-- uses: MichaelFu1998-create/pr-review-assistant@v1
+- uses: MichaelFu1998-create/pr-review-assistant@v1.0.0
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
     github_token: ${{ secrets.GITHUB_TOKEN }}
