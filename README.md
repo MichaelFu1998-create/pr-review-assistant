@@ -6,7 +6,7 @@ Automated PR code review powered by LLM + static analysis tools. Supports multip
 
 - **Static analysis integration** — Semgrep, Ruff, Bandit, ESLint, detect-secrets, and more run locally and feed findings into the LLM for context-aware reviews
 - **Auto-detect tech stack** — Automatically selects relevant tools based on your project's languages
-- **Review personas** — Choose between `mentor` (educational), `strict`, `concise`, or `security-auditor` modes
+- **Review personas** — Choose between `normal` (balanced), `mentor` (educational), or `security-auditor` modes. All personas share the same standardized 8-category defect checklist, so results are directly comparable; persona only changes tone and emphasis.
 - **Token management** — Smart truncation ensures large files and tool outputs fit within model context windows
 - **Educational scoring** — Optional 0-25 rubric scoring for capstone/course use
 - **Multi-provider LLM support** — OpenAI, Anthropic Claude, or any OpenAI-compatible API
@@ -83,7 +83,7 @@ Place in your repo root:
 | `tools` | No | `auto` | `auto`, `none`, or tool list |
 | `severity_threshold` | No | `low` | Min severity: critical/high/medium/low/info |
 | `review_focus` | No | `all` | Focus: security/quality/performance/education/all |
-| `review_persona` | No | `mentor` | Style: mentor/strict/concise/security-auditor |
+| `review_persona` | No | `normal` | Style: normal/mentor/security-auditor |
 | `custom_instructions` | No | — | Additional LLM instructions |
 | `enable_scoring` | No | `false` | Enable 0-25 educational rubric |
 | `logging` | No | `warning` | Log level |
@@ -123,10 +123,11 @@ tools: "none"
 
 | Persona | Style | Best For |
 |---------|-------|----------|
+| `normal` | Balanced, professional, category + severity per issue | General-purpose reviews (default) |
 | `mentor` | Educational, explains WHY, encouraging | Students, capstone projects |
-| `strict` | Thorough audit, flags everything | Security-focused reviews |
-| `concise` | Bullet points, max 5 items/file | Experienced teams |
 | `security-auditor` | CWE categories, risk levels | Security reviews |
+
+> **All personas share the same standardized 8-category defect checklist** (Documentation, Visual Representation, Structure, New Functionality, Resource, Check, Interface, Logic defects). The persona controls tone and emphasis only — the checklist coverage is identical across modes, so results are directly comparable. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for the full checklist and prompt pipeline.
 
 ## Educational Scoring
 

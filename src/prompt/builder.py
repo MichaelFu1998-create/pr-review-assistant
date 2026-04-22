@@ -6,11 +6,14 @@ from dataclasses import dataclass
 from ..config import Config
 from ..llm.base import LLMProvider
 from .templates import (
+    FOCUS_EMPHASIS,
     PERSONAS,
-    REVIEW_CHECKLIST,
     SCORING_PROMPT,
+    STANDARDIZED_CHECKLIST,
     detect_language,
 )
+
+ALL_FOCUS_AREAS = {"security", "quality", "performance", "education"}
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +33,7 @@ class PromptParts:
 
 def build_system_message(config: Config) -> str:
     """Build the system message based on the configured persona."""
-    persona = PERSONAS.get(config.review_persona, PERSONAS["mentor"])
+    persona = PERSONAS.get(config.review_persona, PERSONAS["normal"])
     return persona
 
 
@@ -133,21 +136,17 @@ def _build_context(pr_description: str, comments: list[str], readme: str) -> str
 
 
 def _build_instructions(config: Config) -> str:
-    """Build review instructions based on focus areas."""
-    parts = ["## Review Instructions"]
+    """Build review instructions: standardized checklist + optional focus emphasis + custom notes."""
+    parts = ["## Review Instructions", STANDARDIZED_CHECKLIST]
 
-    for area in config.focus_areas:
-        checklist = REVIEW_CHECKLIST.get(area)
-        if checklist:
-            parts.append(f"### {area.title()}\n{checklist}")
+    selected = set(config.focus_areas)
+    if selected and selected != ALL_FOCUS_AREAS:
+        emphasis_lines = [FOCUS_EMPHASIS[a] for a in config.focus_areas if a in FOCUS_EMPHASIS]
+        if emphasis_lines:
+            parts.append("### Focus Emphasis\n" + "\n".join(f"- {line}" for line in emphasis_lines))
 
     if config.custom_instructions:
         parts.append(f"### Additional Instructions\n{config.custom_instructions}")
-
-    parts.append(
-        "\nProvide your feedback in a structured markdown format with clear sections. "
-        "Prioritize the most impactful issues first."
-    )
 
     return "\n\n".join(parts)
 

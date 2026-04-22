@@ -34,7 +34,7 @@ class Config:
 
     # Review settings
     review_focus: str = "all"
-    review_persona: str = "mentor"
+    review_persona: str = "normal"
     custom_instructions: str = ""
     enable_scoring: bool = False
 
@@ -83,7 +83,7 @@ def load_config() -> Config:
         tools=_env("TOOLS", "auto"),
         severity_threshold=_env("SEVERITY_THRESHOLD", "low"),
         review_focus=_env("REVIEW_FOCUS", "all"),
-        review_persona=_env("REVIEW_PERSONA", "mentor"),
+        review_persona=_env("REVIEW_PERSONA", "normal"),
         custom_instructions=_env("CUSTOM_INSTRUCTIONS", ""),
         enable_scoring=_env("ENABLE_SCORING", "false").lower() == "true",
         logging_level=_env("LOGGING", "warning"),

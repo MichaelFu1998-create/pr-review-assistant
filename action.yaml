@@ -68,9 +68,9 @@ inputs:
     required: false
     default: "all"
   review_persona:
-    description: "Review style: mentor (educational), strict (thorough), concise (brief), security-auditor"
+    description: "Review style: normal (balanced), mentor (educational), security-auditor. All personas share the same standardized 8-category defect checklist; the persona only changes tone and emphasis."
     required: false
-    default: "mentor"
+    default: "normal"
   custom_instructions:
     description: "Additional instructions for the LLM reviewer (e.g., 'We use Django REST Framework')"
     required: false
