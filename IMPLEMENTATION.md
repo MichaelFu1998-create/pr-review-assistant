@@ -178,7 +178,7 @@ flowchart TD
     I -->|yes| K[run files in workspace]
     J --> K
 
-    K --> L[ToolResult<br/>Findings[]]
+    K --> L["ToolResult<br/>Findings[]"]
     L --> M[runner aggregates]
     M --> N[format_findings_for_prompt]
     N --> O[Injected into user message]
