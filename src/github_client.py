@@ -4,7 +4,7 @@ import logging
 from fnmatch import fnmatch
 from typing import Optional
 
-from github import Github
+from github import Github, GithubException
 from github.PullRequest import PullRequest
 from github.Commit import Commit
 from github.Repository import Repository
@@ -27,37 +27,31 @@ def is_merge_commit(commit: Commit) -> bool:
 def files_for_review(pull: PullRequest, patterns: list[str]) -> dict[str, dict]:
     """Collect files changed in the PR that match the given glob patterns.
 
-    Returns a dict of {filename: {"sha": commit_sha, "filename": filename}}.
+    Uses pull.get_files() (the PR's unified diff) and pull.head.sha for content
+    fetching. This avoids 404s on newly added files whose intermediate commit
+    SHAs may not have the file in their tree (e.g. after rebases or for files
+    added partway through the PR's commit history).
+
+    Returns a dict of {filename: {"sha": head_sha, "filename": filename}}.
     """
     changes: dict[str, dict] = {}
-    commits = pull.get_commits()
+    head_sha = pull.head.sha
 
-    for commit in commits:
-        if is_merge_commit(commit):
-            logger.info(f"Skipping merge commit {commit.sha}")
+    for file in pull.get_files():
+        if file.status in ("unchanged", "removed"):
+            logger.info(f"Skipping {file.filename} (status: {file.status})")
             continue
 
-        for file in commit.files:
-            if file.status in ("unchanged", "removed"):
-                logger.info(f"Skipping {file.filename} (status: {file.status})")
-                continue
+        if not file.patch:
+            logger.info(f"Skipping {file.filename} (no patch)")
+            continue
 
-            if file.status == "renamed":
-                logger.info(f"Skipping renamed file {file.filename}")
-                if file.previous_filename in changes:
-                    changes[file.filename] = changes.pop(file.previous_filename)
-                continue
-
-            if not file.patch:
-                logger.info(f"Skipping {file.filename} (no patch)")
-                continue
-
-            if any(fnmatch(file.filename.strip(), p.strip()) for p in patterns):
-                changes[file.filename] = {
-                    "sha": commit.sha,
-                    "filename": file.filename,
-                }
-                logger.info(f"Adding {file.filename} for review")
+        if any(fnmatch(file.filename.strip(), p.strip()) for p in patterns):
+            changes[file.filename] = {
+                "sha": head_sha,
+                "filename": file.filename,
+            }
+            logger.info(f"Adding {file.filename} for review")
 
     return changes
 
@@ -93,15 +87,66 @@ def get_file_content(repo: Repository, filename: str, commit_sha: str) -> Option
         return None
 
 
-def post_review(pull: PullRequest, comments: list[dict]) -> None:
-    """Post a review with all comments to the PR."""
+def safe_create_review(
+    pull: PullRequest,
+    review_body: str,
+    comments: list[dict],
+) -> None:
+    """Post a PR review, falling back to a summary if inline posting is rejected.
+
+    GitHub's create_review API can return 422 with mixed errors when:
+      - some paths cannot be resolved against the PR diff
+      - too many comments are submitted at once ("was submitted too quickly")
+    Rather than losing the entire review, we fall back to posting one
+    consolidated review with all comment bodies inlined into the review_body
+    (no per-line positioning). The LLM feedback is preserved.
+    """
     if not comments:
         logger.info("No comments to post")
         return
 
+    try:
+        pull.create_review(
+            body=review_body,
+            event="COMMENT",
+            comments=comments,
+        )
+        logger.info(f"Posted review with {len(comments)} inline comment(s)")
+        return
+    except GithubException as e:
+        if e.status != 422:
+            raise
+        logger.warning(
+            "Inline review rejected by GitHub (422). Falling back to a "
+            "summary review without inline comments. Original error: %s",
+            e.data,
+        )
+
+    summary_body = build_summary_review_body(review_body, comments)
     pull.create_review(
-        body="**Automated Code Review**",
+        body=summary_body,
         event="COMMENT",
-        comments=comments,
     )
-    logger.info(f"Posted review with {len(comments)} comments")
+    logger.info(f"Posted summary review with {len(comments)} file section(s)")
+
+
+def build_summary_review_body(review_body: str, comments: list[dict]) -> str:
+    """Concatenate per-file comment bodies into one review-level markdown body.
+
+    Used as the fallback payload when inline comments are rejected. The path
+    used for the section header is taken from the comment's `path` field; if
+    it has been URL-encoded, we unquote it for human readability.
+    """
+    from urllib.parse import unquote
+
+    parts = [review_body, "", "---", ""]
+    for c in comments:
+        path = unquote(c.get("path", "unknown"))
+        body = c.get("body", "")
+        parts.append(f"### `{path}`")
+        parts.append("")
+        parts.append(body)
+        parts.append("")
+        parts.append("---")
+        parts.append("")
+    return "\n".join(parts)

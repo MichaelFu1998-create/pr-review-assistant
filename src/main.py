@@ -11,7 +11,7 @@ from .github_client import (
     files_for_review,
     fetch_contextual_info,
     get_file_content,
-    post_review,
+    safe_create_review,
 )
 from .llm.base import LLMConfig
 from .prompt.builder import build_prompt
@@ -188,17 +188,13 @@ def main():
             "body": body,
         })
 
-    # Post review
+    # Post review (with fallback to a summary review if GitHub rejects the
+    # inline comments — e.g. unresolvable paths or rate-limited submissions).
     if comments:
         review_body = format_review_body(
             len(comments), tools_used, total_findings, config.review_persona,
         )
-        pull.create_review(
-            body=review_body,
-            event="COMMENT",
-            comments=comments,
-        )
-        logger.info(f"Posted review with {len(comments)} comment(s)")
+        safe_create_review(pull, review_body, comments)
     else:
         logger.info("No review comments to post")
 
