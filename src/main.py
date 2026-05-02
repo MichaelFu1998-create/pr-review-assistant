@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+from urllib.parse import quote
 
 from .config import Config, load_config
 from .github_client import (
@@ -182,7 +183,7 @@ def main():
         first_file = False
 
         comments.append({
-            "path": filename,
+            "path": quote(filename, safe="/"),
             "position": 1,
             "body": body,
         })
