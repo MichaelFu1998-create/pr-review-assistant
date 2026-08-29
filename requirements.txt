@@ -1,6 +1,4 @@
 openai>=1.40
+anthropic>=0.40
 PyGithub>=2.0
 tiktoken>=0.7
-tenacity>=8.0
-requests>=2.31
-pytest>=7.0

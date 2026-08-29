@@ -2,7 +2,6 @@
 
 import json
 import logging
-import os
 import subprocess
 
 from ..base import BaseTool, Finding, ToolResult
@@ -43,8 +42,6 @@ class PMDTool(BaseTool):
 
     def run(self, files: list[str], workspace: str, config: dict) -> ToolResult:
         rulesets = config.get("rulesets", "rulesets/java/quickstart.xml")
-        file_list = ",".join(files)
-
         cmd = [
             "pmd", "check",
             "--format", "json",

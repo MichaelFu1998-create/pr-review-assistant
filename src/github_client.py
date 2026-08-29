@@ -32,7 +32,9 @@ def files_for_review(pull: PullRequest, patterns: list[str]) -> dict[str, dict]:
     SHAs may not have the file in their tree (e.g. after rebases or for files
     added partway through the PR's commit history).
 
-    Returns a dict of {filename: {"sha": head_sha, "filename": filename}}.
+    Returns a dict of {filename: {"sha", "filename", "patch", "status"}}. The
+    patch is what the v2 agent reviews — v1 only ever looked at whole files, so
+    it could not tell changed code from pre-existing code.
     """
     changes: dict[str, dict] = {}
     head_sha = pull.head.sha
@@ -50,10 +52,31 @@ def files_for_review(pull: PullRequest, patterns: list[str]) -> dict[str, dict]:
             changes[file.filename] = {
                 "sha": head_sha,
                 "filename": file.filename,
+                "patch": file.patch,
+                "status": file.status,
             }
             logger.info(f"Adding {file.filename} for review")
 
     return changes
+
+
+def fetch_pr_metadata(pull: PullRequest) -> dict:
+    """Collect the PR's own description of itself, for the agent to check the
+    diff against."""
+    comments = [
+        comment.body
+        for comment in list(pull.get_issue_comments()) + list(pull.get_review_comments())
+        if not comment.user.type == "Bot"
+    ]
+    return {
+        "title": pull.title or "",
+        "description": pull.body or "",
+        "author": getattr(pull.user, "login", "") or "",
+        "comments": comments,
+        "labels": [label.name for label in pull.labels],
+        "base_ref": getattr(pull.base, "ref", "") or "",
+        "head_sha": pull.head.sha,
+    }
 
 
 def fetch_contextual_info(pull: PullRequest, repo: Repository) -> tuple[str, list[str], str]:

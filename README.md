@@ -2,6 +2,37 @@
 
 Automated PR code review powered by LLM + static analysis tools. Supports multiple languages, review personas, educational scoring, and flexible configuration for diverse tech stacks.
 
+## New in v2: agentic review
+
+v2 adds a reviewer that **investigates** instead of being handed one prompt per
+file. It reads the diff, opens related files, searches for callers, runs
+analysers on demand, and reports each issue as a structured record — which is
+what makes real line anchoring, SARIF, and machine-readable reports possible.
+
+| `agent_mode` | Behaviour | Cost |
+|---|---|---|
+| `agent` | **Default.** One agent with a 12-tool read-only toolbelt | ~1× |
+| `pipeline` | v1: one single-shot LLM call per file, no tools | Lowest |
+
+v1 is untouched and still selectable, so you can run both on the same PR and
+compare.
+
+**Applyable fixes.** For high-confidence issues the reviewer attaches a GitHub
+**suggested change**, so you get an *Apply* button per fix — commit them one at
+a time or batch them into one commit. The tool never pushes to your branch: a
+fix cannot land without your click.
+
+**Also new:** xAI Grok is the default provider (`grok-4.6`) · inline comments on
+the correct line · SARIF for the Security tab · `review.json` artifact ·
+optional severity gating.
+
+**Sharper reviews.** The old checklist asked about naming, brackets and
+indentation. It now works to a bar — state the trigger, the failure and the
+consequence, or say nothing — with formatting and naming explicitly off-limits.
+
+📖 **[How it works](docs/HOW_IT_WORKS.md)** — what the tool does and why
+🚀 **[Quickstart](docs/QUICKSTART.md)** — get it running in five minutes
+
 ## Features
 
 - **Static analysis integration** — Semgrep, Ruff, Bandit, ESLint, detect-secrets, and more run locally and feed findings into the LLM for context-aware reviews
@@ -9,9 +40,9 @@ Automated PR code review powered by LLM + static analysis tools. Supports multip
 - **Review personas** — Choose between `normal` (balanced), `mentor` (educational), or `security-auditor` modes. All personas share the same standardized 8-category defect checklist, so results are directly comparable; persona only changes tone and emphasis.
 - **Token management** — Smart truncation ensures large files and tool outputs fit within model context windows
 - **Educational scoring** — Optional 0-25 rubric scoring for capstone/course use
-- **Multi-provider LLM support** — OpenAI, Anthropic Claude, or any OpenAI-compatible API
+- **Multi-provider LLM support** — OpenAI, Anthropic Claude, xAI Grok, or any OpenAI-compatible API
 - **Parameterizable** — Per-repo `.pr-review.json` config for fine-grained control
-- **11 tool plugins** — Semgrep, Ruff, Bandit, ESLint, npm audit, PMD, Checkstyle, golangci-lint, Hadolint, ShellCheck, Trivy, Checkov, detect-secrets
+- **13 tool plugins** — Semgrep, Ruff, Bandit, ESLint, npm audit, PMD, Checkstyle, golangci-lint, Hadolint, ShellCheck, Trivy, Checkov, detect-secrets
 
 ## Quick Start
 
@@ -72,7 +103,7 @@ Place in your repo root:
 | `openai_api_key` | Yes | — | OpenAI API key |
 | `github_token` | Yes | — | GitHub token with PR write access |
 | `github_pr_id` | Yes | — | PR number to review |
-| `openai_model` | No | `gpt-5.4-mini-2026-03-17` | LLM model name |
+| `openai_model` | No | `grok-4.6` | LLM model name, for whichever provider is selected |
 | `openai_temperature` | No | `1` | Sampling temperature [0, 1] |
 | `openai_max_tokens` | No | `32000` | Max response tokens |
 | `llm_provider` | No | `openai` | `openai`, `anthropic` |
@@ -147,7 +178,7 @@ Enable with `enable_scoring: "true"`. The LLM scores each PR on:
 
 ```yaml
 openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-openai_model: "gpt-5.4-mini-2026-03-17"
+openai_model: "grok-4.6"
 ```
 
 ### Anthropic Claude
