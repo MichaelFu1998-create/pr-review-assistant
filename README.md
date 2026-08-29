@@ -40,8 +40,8 @@ It reads your diff, investigates the surrounding code, and proposes fixes you ap
 ### How it works
 
 - [6. Two engines](#6-two-engines)
-  - [6.1 `pipeline` — the original design](#61-pipeline-the-original-design)
-  - [6.2 `agent` — the default](#62-agent-the-default)
+  - [6.1 `pipeline` — the original design](#61-pipeline--the-original-design)
+  - [6.2 `agent` — the default](#62-agent--the-default)
 - [7. Why structured findings matter](#7-why-structured-findings-matter)
 - [8. The agent loop](#8-the-agent-loop)
 - [9. The toolbelt](#9-the-toolbelt)
