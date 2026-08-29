@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timezone
 
 from ..agent.findings import AgentFinding
-from .summary import severity_counts
+from .summary import count_fixes, severity_counts
 
 
 def build_report(
@@ -47,6 +47,8 @@ def build_report(
             "by_severity": {k: v for k, v in severity_counts(findings).items() if v},
             "by_category": categories,
             "by_source": _by_source(findings),
+            "fixes_applyable": count_fixes(findings)[0],
+            "fixes_rejected": count_fixes(findings)[1],
         },
         "findings": [f.to_dict() for f in findings],
     }

@@ -149,7 +149,7 @@ def _script():
 
 def _run(harness, config=None, script=None):
     repo, posted = harness
-    config = config or Config(agent_mode="single", github_pr_id=42)
+    config = config or Config(agent_mode="agent", github_pr_id=42)
     llm = FakeProvider(script or _script())
     main_module.run_agent_review(
         config, llm, LLMConfig(), MagicMock(), MagicMock(), FILES, "owner/repo"
@@ -174,7 +174,7 @@ class TestFullRun:
         assert "Three serious security issues." in body
         assert "Critical" in body and "High" in body
         assert "security: 3" in body
-        assert "mode: `single`" in body
+        assert "mode: `agent`" in body
 
     def test_cwe_links_appear_in_comments(self, harness):
         posted, _ = _run(harness)
@@ -200,7 +200,7 @@ class TestOutputArtifacts:
     def test_sarif_written_and_valid(self, harness, tmp_path):
         repo, _ = harness
         target = tmp_path / "out.sarif"
-        _run(harness, Config(agent_mode="single", output_sarif=str(target)))
+        _run(harness, Config(agent_mode="agent", output_sarif=str(target)))
 
         doc = json.loads(target.read_text())
         assert doc["version"] == "2.1.0"
@@ -216,7 +216,7 @@ class TestOutputArtifacts:
         target = tmp_path / "review.json"
         _run(
             harness,
-            Config(agent_mode="single", output_json=str(target), github_pr_id=42),
+            Config(agent_mode="agent", output_json=str(target), github_pr_id=42),
         )
         report = json.loads(target.read_text())
         assert report["pr_number"] == 42
@@ -234,7 +234,7 @@ class TestOutputArtifacts:
 class TestGatingExit:
     def test_fail_on_exits_non_zero(self, harness):
         with pytest.raises(SystemExit) as exc:
-            _run(harness, Config(agent_mode="single", fail_on="high"))
+            _run(harness, Config(agent_mode="agent", fail_on="high"))
         assert exc.value.code == 1
 
     def test_below_threshold_does_not_exit(self, harness):
@@ -248,10 +248,105 @@ class TestGatingExit:
             ),
             turn(call("finish", summary="minor only")),
         ]
-        _run(harness, Config(agent_mode="single", fail_on="high"), script=script)
+        _run(harness, Config(agent_mode="agent", fail_on="high"), script=script)
 
     def test_default_never_fails(self, harness):
-        _run(harness, Config(agent_mode="single"))
+        _run(harness, Config(agent_mode="agent"))
+
+
+class TestApplyableFixes:
+    """A full run where the agent proposes fixes, some of which fail validation."""
+
+    def _script(self):
+        return [
+            turn(call("read_diff", _id="c0", path="app.py")),
+            turn(call("read_lines", _id="c1", path="app.py", start_line=8, end_line=8)),
+            # Valid: in the diff, high confidence, keeps the indentation.
+            turn(
+                call(
+                    "post_finding", _id="c2",
+                    path="app.py", line=8, severity="critical", category="security",
+                    cwe="CWE-89", title="SQL injection in get_user",
+                    body="user_id is concatenated into the query.", confidence="high",
+                    fix_start_line=8, fix_end_line=8,
+                    fix_replacement='    cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))',
+                )
+            ),
+            # Refused: medium confidence may not carry an Apply button.
+            turn(
+                call(
+                    "post_finding", _id="c3",
+                    path="app.py", line=13, severity="high", category="security",
+                    cwe="CWE-502", title="Unsafe deserialization", body="b",
+                    confidence="medium",
+                    fix_start_line=13, fix_end_line=13,
+                    fix_replacement="    return json.loads(raw)",
+                )
+            ),
+            # Refused: outside the diff entirely.
+            turn(
+                call(
+                    "post_finding", _id="c4",
+                    path="app.py", line=16, severity="critical", category="security",
+                    cwe="CWE-798", title="Hardcoded API key", body="b",
+                    confidence="high",
+                    fix_start_line=900, fix_end_line=900, fix_replacement="x",
+                )
+            ),
+            turn(call("finish", _id="c5", summary="Three issues, one auto-fixable.")),
+        ]
+
+    def test_only_the_valid_fix_becomes_a_suggestion(self, harness):
+        posted, _ = _run(harness, script=self._script())
+        bodies = " ".join(c["body"] for c in posted["comments"])
+        assert bodies.count("```suggestion") == 1
+        assert "not auto-applyable" in bodies
+
+    def test_suggestion_payload_targets_the_fix_range(self, harness):
+        posted, _ = _run(harness, script=self._script())
+        suggestion = next(c for c in posted["comments"] if "```suggestion" in c["body"])
+        assert suggestion["line"] == 8
+        assert suggestion["side"] == "RIGHT"
+        assert "start_line" not in suggestion  # single-line fix
+        assert "(user_id,)" in suggestion["body"]
+
+    def test_summary_tells_the_author_how_to_apply(self, harness):
+        posted, _ = _run(harness, script=self._script())
+        assert "1 suggested fix" in posted["body"]
+        assert "Apply suggestion" in posted["body"]
+        assert "1 applyable fix(es), 2 not applyable" in posted["body"]
+
+    def test_agent_is_told_why_a_fix_was_refused(self, harness):
+        _, llm = _run(harness, script=self._script())
+        tool_messages = [
+            m.content
+            for t in llm.calls
+            for m in t["messages"]
+            if m.role == "tool"
+        ]
+        joined = "\n".join(tool_messages)
+        assert "Fix accepted as an applyable suggestion" in joined
+        assert "only high-confidence findings" in joined
+        assert "not all part of this PR's diff" in joined
+
+    def test_report_records_fix_counts(self, harness, tmp_path):
+        target = tmp_path / "review.json"
+        _run(
+            harness,
+            Config(agent_mode="agent", output_json=str(target)),
+            script=self._script(),
+        )
+        report = json.loads(target.read_text())
+        assert report["totals"]["fixes_applyable"] == 1
+        assert report["totals"]["fixes_rejected"] == 2
+
+    def test_suggest_fixes_false_disables_every_suggestion(self, harness):
+        posted, _ = _run(
+            harness,
+            Config(agent_mode="agent", suggest_fixes=False),
+            script=self._script(),
+        )
+        assert "```suggestion" not in " ".join(c["body"] for c in posted["comments"])
 
 
 class TestDegradedRuns:
@@ -278,7 +373,7 @@ class TestDegradedRuns:
             ]
         )
         main_module.run_agent_review(
-            Config(agent_mode="single"), flaky, LLMConfig(),
+            Config(agent_mode="agent"), flaky, LLMConfig(),
             MagicMock(), MagicMock(), FILES, "owner/repo",
         )
         assert "Found before the outage" in " ".join(
@@ -289,7 +384,7 @@ class TestDegradedRuns:
         repo, posted = harness
         llm = FakeProvider([turn(call("finish", summary=""))])
         main_module.run_agent_review(
-            Config(agent_mode="single"), llm, LLMConfig(),
+            Config(agent_mode="agent"), llm, LLMConfig(),
             MagicMock(), MagicMock(), FILES, "owner/repo",
         )
         assert posted == {}

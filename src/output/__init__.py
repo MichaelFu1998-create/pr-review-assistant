@@ -8,13 +8,14 @@ from .comments import build_inline_comments, encode_path, format_finding_body
 from .gating import should_fail, parse_fail_on
 from .json_report import build_report, write_report
 from .sarif import build_sarif, write_sarif
-from .summary import build_review_body, format_severity_table, severity_counts
+from .summary import build_review_body, count_fixes, format_severity_table, severity_counts
 
 __all__ = [
     "build_inline_comments",
     "build_report",
     "build_review_body",
     "build_sarif",
+    "count_fixes",
     "encode_path",
     "format_finding_body",
     "format_severity_table",

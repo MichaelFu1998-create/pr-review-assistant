@@ -192,6 +192,34 @@ class FilePatch:
         nearest = min(commentable, key=lambda c: (abs(c - line), c))
         return nearest if abs(nearest - line) <= _SNAP_DISTANCE else None
 
+    def range_text(self, start: int, end: int) -> list[str] | None:
+        """Exact new-side text for an inclusive line range.
+
+        None if any line in the range is absent from the diff. A GitHub
+        suggestion replaces the commented range verbatim, so the caller needs
+        the true current text to check the replacement actually differs and
+        keeps its indentation.
+        """
+        if start < 1 or end < start:
+            return None
+        by_line = {
+            line.new_line: line.text
+            for hunk in self.hunks
+            for line in hunk.lines
+            if line.new_line is not None and line.kind in (ADDED, CONTEXT)
+        }
+        if any(n not in by_line for n in range(start, end + 1)):
+            return None
+        return [by_line[n] for n in range(start, end + 1)]
+
+    def is_suggestable(self, start: int, end: int) -> bool:
+        """True when every line in the range is a commentable new-side line.
+
+        GitHub rejects a review comment whose range leaves the diff, and one
+        rejection fails the whole review, so this is checked before posting.
+        """
+        return self.range_text(start, end) is not None
+
     def annotated(self, max_lines: int | None = None) -> str:
         """Render the diff with new-file line numbers, for the LLM.
 
@@ -267,6 +295,14 @@ class DiffMap:
     def is_changed(self, path: str, line: int) -> bool:
         file_patch = self._files.get(path)
         return bool(file_patch and file_patch.is_changed(line))
+
+    def range_text(self, path: str, start: int, end: int) -> list[str] | None:
+        file_patch = self._files.get(path)
+        return file_patch.range_text(start, end) if file_patch else None
+
+    def is_suggestable(self, path: str, start: int, end: int) -> bool:
+        file_patch = self._files.get(path)
+        return bool(file_patch and file_patch.is_suggestable(start, end))
 
     def stats(self, path: str) -> tuple[int, int]:
         """(additions, deletions) for a path."""

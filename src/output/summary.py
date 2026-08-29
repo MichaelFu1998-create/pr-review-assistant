@@ -25,6 +25,17 @@ def format_severity_table(findings: list[AgentFinding]) -> str:
     return "\n".join(rows)
 
 
+def count_fixes(findings: list[AgentFinding]) -> tuple[int, int]:
+    """(applyable, rejected) fix counts.
+
+    The rejected count is the honest half: it says how often the agent proposed
+    a fix that could not be turned into a suggestion.
+    """
+    applyable = sum(1 for f in findings if f.fix is not None and f.fix.valid)
+    rejected = sum(1 for f in findings if f.fix is not None and not f.fix.valid)
+    return applyable, rejected
+
+
 def format_category_line(findings: list[AgentFinding]) -> str:
     counts: dict[str, int] = {}
     for finding in findings:
@@ -58,6 +69,18 @@ def build_review_body(
     if categories:
         parts.extend([f"_{categories}_", ""])
 
+    applyable, _rejected = count_fixes(findings)
+    if applyable:
+        plural = "fix" if applyable == 1 else "fixes"
+        parts.extend(
+            [
+                f"**{applyable} suggested {plural}** can be applied directly from "
+                "the inline comments — use **Apply suggestion** to commit one, or "
+                "**Add suggestion to batch** to commit several together.",
+                "",
+            ]
+        )
+
     if scores:
         table = format_score_summary(scores)
         if table:
@@ -87,7 +110,7 @@ def build_review_body(
                 parts.extend(f"- {line}" for line in lines)
                 parts.append("")
 
-    parts.append(_footer(tools_used, budget, agent_mode, model))
+    parts.append(_footer(tools_used, budget, agent_mode, model, count_fixes(findings)))
     return "\n".join(parts)
 
 
@@ -96,6 +119,7 @@ def _footer(
     budget: dict | None,
     agent_mode: str,
     model: str,
+    fixes: tuple[int, int] | None = None,
 ) -> str:
     """A one-line account of what the run actually did.
 
@@ -105,6 +129,12 @@ def _footer(
     bits = [f"mode: `{agent_mode}`"]
     if model:
         bits.append(f"model: `{model}`")
+    if fixes and (fixes[0] or fixes[1]):
+        applyable, rejected = fixes
+        note = f"{applyable} applyable fix(es)"
+        if rejected:
+            note += f", {rejected} not applyable"
+        bits.append(note)
     if tools_used:
         bits.append(f"analysers: {', '.join(tools_used)}")
     if budget:

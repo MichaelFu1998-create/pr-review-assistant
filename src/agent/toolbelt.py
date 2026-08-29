@@ -8,6 +8,7 @@ never a shell string.
 """
 
 import logging
+import os
 import subprocess
 from dataclasses import dataclass
 
@@ -18,6 +19,7 @@ from ..tools.runner import _run_single_tool
 from .budget import Budget
 from .context import ReviewContext
 from .findings import AgentFinding, FindingCollector
+from .fixes import rejection_feedback, validate_fix
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +50,12 @@ class Toolbelt:
         collector: FindingCollector,
         budget: Budget,
         source: str = "agent",
+        suggest_fixes: bool = True,
     ):
         self.context = context
         self.collector = collector
         self.budget = budget
+        self.suggest_fixes = suggest_fixes
         # Labels each finding with what produced it: "agent" or an analyser name.
         self.source = source
 
@@ -97,6 +101,24 @@ class Toolbelt:
                         "end_line": {"type": "integer"},
                     },
                     "required": ["path"],
+                },
+            ),
+            ToolSchema(
+                name="read_lines",
+                description=(
+                    "Read an exact range of a file as raw text, with NO line-number "
+                    "gutter. Use this to compose a fix: copy the range, edit it, and "
+                    "pass the result as fix_replacement. read_file's line numbers "
+                    "would otherwise end up inside your replacement."
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string"},
+                        "start_line": {"type": "integer"},
+                        "end_line": {"type": "integer"},
+                    },
+                    "required": ["path", "start_line", "end_line"],
                 },
             ),
             ToolSchema(
@@ -249,7 +271,37 @@ class Toolbelt:
                         },
                         "suggested_fix": {
                             "type": "string",
-                            "description": "Optional corrected code.",
+                            "description": (
+                                "Optional corrected code, as prose. Use the fix_* "
+                                "fields instead when you can be exact."
+                            ),
+                        },
+                        "fix_start_line": {
+                            "type": "integer",
+                            "description": (
+                                "First line your fix replaces. Together with "
+                                "fix_end_line and fix_replacement this becomes a "
+                                "GitHub suggestion with an Apply button, so the range "
+                                "must be exact and every line in it must appear in "
+                                "the diff."
+                            ),
+                        },
+                        "fix_end_line": {
+                            "type": "integer",
+                            "description": (
+                                "Last line your fix replaces, inclusive. Omit for a "
+                                "single-line fix."
+                            ),
+                        },
+                        "fix_replacement": {
+                            "type": "string",
+                            "description": (
+                                "The COMPLETE replacement text for that line range, "
+                                "including each line's original leading whitespace. "
+                                "It replaces those lines verbatim. Read the range "
+                                "with read_lines first. Only offer a fix you are "
+                                "certain of; it is one click from being committed."
+                            ),
                         },
                     },
                     "required": ["path", "severity", "category", "title", "body"],
@@ -325,6 +377,46 @@ class Toolbelt:
                     start=args.get("start_line"),
                     end=args.get("end_line"),
                 )
+            )
+        )
+
+    def _tool_read_lines(self, args: dict) -> ToolOutcome:
+        path = str(args.get("path", ""))
+        start = args.get("start_line")
+        end = args.get("end_line")
+        if not isinstance(start, int) or not isinstance(end, int):
+            return ToolOutcome("Error: 'start_line' and 'end_line' must be integers.")
+
+        # Prefer the diff's own text: it is what a suggestion will replace, and
+        # it is guaranteed to match what GitHub has for those lines.
+        from_diff = self.context.diff.range_text(path, start, end)
+        if from_diff is not None:
+            body = "\n".join(from_diff)
+            return ToolOutcome(
+                _truncate(
+                    f"{path} lines {start}-{end} (exact text, no gutter):\n{body}"
+                )
+            )
+
+        resolved = self.context.resolve(path)
+        if resolved is None:
+            return ToolOutcome(f"Error: '{path}' is outside the repository.")
+        if not os.path.isfile(resolved):
+            return ToolOutcome(f"Error: '{path}' does not exist in the checkout.")
+        try:
+            with open(resolved, encoding="utf-8", errors="replace") as f:
+                lines = f.read().split("\n")
+        except OSError as e:
+            return ToolOutcome(f"Error reading '{path}': {e}")
+
+        if start < 1 or start > len(lines):
+            return ToolOutcome(f"Error: '{path}' has {len(lines)} lines.")
+        body = "\n".join(lines[start - 1 : min(end, len(lines))])
+        return ToolOutcome(
+            _truncate(
+                f"{path} lines {start}-{end} (exact text, no gutter). Note: these "
+                f"lines are not all in the PR diff, so they cannot carry an "
+                f"applyable fix.\n{body}"
             )
         )
 
@@ -474,7 +566,29 @@ class Toolbelt:
         if finding.path and finding.path not in self.context.diff:
             # Not fatal: a finding may legitimately concern an unchanged caller.
             logger.info("Finding on unchanged file %s", finding.path)
-        return ToolOutcome(self.collector.add(finding))
+
+        message = self.collector.add(finding)
+
+        # Validate here rather than at render time so the agent can correct a
+        # near-miss while it still has the context to do so.
+        if finding.fix is not None:
+            validate_fix(
+                finding.fix,
+                finding.path,
+                self.context.diff,
+                confidence=finding.confidence,
+                enabled=self.suggest_fixes,
+            )
+            if finding.fix.valid:
+                message += (
+                    f" Fix accepted as an applyable suggestion on lines "
+                    f"{finding.fix.start_line}-{finding.fix.end_line}."
+                )
+            else:
+                message += "\n" + rejection_feedback(
+                    finding.fix, finding.path, self.context.diff
+                )
+        return ToolOutcome(message)
 
     def _tool_finish(self, args: dict) -> ToolOutcome:
         summary = str(args.get("summary", "")).strip()

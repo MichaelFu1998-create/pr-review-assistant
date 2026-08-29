@@ -28,7 +28,10 @@ def run_single_agent(
         max_tokens=config.max_agent_tokens,
     )
     collector = FindingCollector(max_findings=config.max_findings)
-    toolbelt = Toolbelt(context, collector, budget, source="agent")
+    toolbelt = Toolbelt(
+        context, collector, budget, source="agent",
+        suggest_fixes=config.suggest_fixes,
+    )
 
     system_prompt = build_system_prompt(config)
     kickoff = build_kickoff_message(

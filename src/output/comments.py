@@ -49,10 +49,19 @@ def format_finding_body(finding: AgentFinding) -> str:
     if finding.body:
         parts.append(finding.body)
 
-    if finding.suggested_fix:
-        # A plain fence, not a ```suggestion block: a suggestion must replace the
-        # commented range exactly, and an approximate one produces a broken
-        # "Apply" button rather than a helpful edit.
+    fix = finding.fix
+    if fix is not None and fix.valid:
+        # A real suggestion block: GitHub renders an Apply button, and applying
+        # it replaces exactly the commented range. Validated in agent/fixes.py,
+        # because an out-of-range suggestion 422s the whole review.
+        parts.extend(
+            ["", "**Suggested fix** — apply directly:", "```suggestion", fix.replacement, "```"]
+        )
+    elif fix is not None and fix.replacement:
+        # Validation refused it, so show the code without an Apply button rather
+        # than dropping the agent's proposed fix entirely.
+        parts.extend(["", "**Suggested fix** (not auto-applyable):", "```", fix.replacement, "```"])
+    elif finding.suggested_fix:
         parts.extend(["", "**Suggested fix:**", "```", finding.suggested_fix.strip(), "```"])
 
     footer = [f"source: {finding.source}"]
@@ -74,8 +83,27 @@ def build_inline_comments(
     """
     grouped: dict[tuple[str, int], list[AgentFinding]] = {}
     unanchored: list[AgentFinding] = []
+    comments: list[dict] = []
 
     for finding in findings:
+        fix = finding.fix
+        if fix is not None and fix.valid:
+            # A suggestion must be alone in its comment — two ```suggestion
+            # blocks in one body do not both render an Apply button — and it is
+            # anchored to the fix's own range, not to the finding's line.
+            finding.anchored_line = fix.start_line
+            comment = {
+                "path": encode_path(finding.path),
+                "line": fix.end_line,
+                "side": "RIGHT",
+                "body": format_finding_body(finding),
+            }
+            if fix.is_multiline:
+                comment["start_line"] = fix.start_line
+                comment["start_side"] = "RIGHT"
+            comments.append(comment)
+            continue
+
         line = diff.anchor(finding.path, finding.line)
         if line is None:
             unanchored.append(finding)
@@ -83,7 +111,6 @@ def build_inline_comments(
         finding.anchored_line = line
         grouped.setdefault((finding.path, line), []).append(finding)
 
-    comments = []
     for (path, line), group in grouped.items():
         bodies = [format_finding_body(f) for f in group]
         comments.append(
@@ -95,10 +122,13 @@ def build_inline_comments(
             }
         )
 
+    applyable = sum(1 for f in findings if f.fix is not None and f.fix.valid)
     logger.info(
-        "Anchored %d finding(s) into %d comment(s); %d could not be anchored",
+        "Anchored %d finding(s) into %d comment(s) (%d applyable fix(es)); "
+        "%d could not be anchored",
         len(findings) - len(unanchored),
         len(comments),
+        applyable,
         len(unanchored),
     )
     return comments, unanchored

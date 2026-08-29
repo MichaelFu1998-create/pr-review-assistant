@@ -14,6 +14,7 @@ import re
 from dataclasses import asdict, dataclass, field
 
 from ..tools.base import SEVERITY_ORDER, Finding
+from .fixes import Fix
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,9 @@ class AgentFinding:
     confidence: str = "medium"
     evidence: list[str] = field(default_factory=list)
     suggested_fix: str | None = None
+    # An exact, validated replacement rendered as a GitHub suggestion. Distinct
+    # from suggested_fix, which is free text with no guaranteed line range.
+    fix: Fix | None = None
     source: str = "agent"
     # Set by the reporter once the diff line map has resolved `line`; None means
     # the finding could not be anchored and belongs in the summary body.
@@ -108,6 +112,8 @@ class AgentFinding:
         evidence = arguments.get("evidence") or []
         if isinstance(evidence, str):
             evidence = [evidence]
+
+        fix = _fix_from_arguments(arguments)
 
         return cls(
             path=str(arguments.get("path") or "").strip(),
@@ -121,6 +127,7 @@ class AgentFinding:
             confidence=normalize_confidence(arguments.get("confidence")),
             evidence=[str(e) for e in evidence][:10],
             suggested_fix=(arguments.get("suggested_fix") or None),
+            fix=fix,
             source=source,
         )
 
@@ -150,7 +157,29 @@ class AgentFinding:
         return (self.path, self.line, _normalize_title(self.title))
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        data = asdict(self)
+        data["fix"] = self.fix.to_dict() if self.fix else None
+        return data
+
+
+def _fix_from_arguments(arguments: dict) -> Fix | None:
+    """Build a Fix from post_finding's optional fix_* arguments.
+
+    All three must be present and coherent; a partial fix is silently no fix,
+    since the agent is told the requirement in the tool schema.
+    """
+    start = _coerce_line(arguments.get("fix_start_line"))
+    end = _coerce_line(arguments.get("fix_end_line"))
+    replacement = arguments.get("fix_replacement")
+
+    if start is None or replacement is None:
+        return None
+    if not isinstance(replacement, str):
+        return None
+    # A single-line fix may omit the end line.
+    if end is None:
+        end = start
+    return Fix(start_line=start, end_line=end, replacement=replacement.rstrip("\n"))
 
 
 def _coerce_line(value) -> int | None:
