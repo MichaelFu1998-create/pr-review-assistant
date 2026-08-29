@@ -23,6 +23,7 @@ class Config:
     openai_max_tokens: int = 32000
     api_base_url: str = ""
     anthropic_api_key: str = ""
+    xai_api_key: str = ""
 
     # File filtering
     files: str = "*"
@@ -78,6 +79,7 @@ def load_config() -> Config:
         openai_max_tokens=int(_env("OPENAI_MAX_TOKENS", "32000")),
         api_base_url=_env("API_BASE_URL", ""),
         anthropic_api_key=_env("ANTHROPIC_API_KEY", ""),
+        xai_api_key=_env("XAI_API_KEY", ""),
         files=_env("FILES", "*"),
         max_files=int(_env("MAX_FILES", "10")),
         tools=_env("TOOLS", "auto"),

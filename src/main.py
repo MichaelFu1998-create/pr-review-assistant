@@ -27,17 +27,43 @@ from .checks.git_hygiene import check_git_hygiene
 logger = logging.getLogger(__name__)
 
 
+# Config field (and action input name — they match) holding each provider's key.
+PROVIDER_KEYS = {
+    "openai": "openai_api_key",
+    "anthropic": "anthropic_api_key",
+    "xai": "xai_api_key",
+}
+
+
 def create_llm_provider(config: Config):
     """Create the appropriate LLM provider based on configuration."""
     if config.llm_provider == "anthropic":
         from .llm.anthropic_provider import AnthropicProvider
         return AnthropicProvider(api_key=config.anthropic_api_key)
-    else:
-        from .llm.openai_provider import OpenAIProvider
-        return OpenAIProvider(
-            api_key=config.openai_api_key,
+    if config.llm_provider == "xai":
+        from .llm.xai_provider import XAIProvider
+        return XAIProvider(
+            api_key=config.xai_api_key,
             base_url=config.api_base_url or None,
         )
+    from .llm.openai_provider import OpenAIProvider
+    return OpenAIProvider(
+        api_key=config.openai_api_key,
+        base_url=config.api_base_url or None,
+    )
+
+
+def validate_provider_key(config: Config) -> str | None:
+    """Return an error message if the configured provider has no API key."""
+    if config.llm_provider not in PROVIDER_KEYS:
+        return (
+            f"Unknown llm_provider '{config.llm_provider}'. "
+            f"Expected one of: {', '.join(sorted(PROVIDER_KEYS))}"
+        )
+    key_field = PROVIDER_KEYS[config.llm_provider]
+    if not getattr(config, key_field, ""):
+        return f"llm_provider is '{config.llm_provider}' but '{key_field}' is not set"
+    return None
 
 
 def main():
@@ -50,8 +76,9 @@ def main():
         format="%(levelname)s: %(name)s: %(message)s",
     )
 
-    if not config.openai_api_key and config.llm_provider == "openai":
-        logger.error("OpenAI API key is required")
+    key_error = validate_provider_key(config)
+    if key_error:
+        logger.error(key_error)
         sys.exit(1)
     if not config.github_token:
         logger.error("GitHub token is required")
