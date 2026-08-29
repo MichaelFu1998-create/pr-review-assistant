@@ -329,12 +329,27 @@ Code scanning is free on public repositories. Private repositories need GitHub
 Code Security (or Advanced Security).
 
 > [!IMPORTANT]
-> **Uploading SARIF adds a second check that can fail your PR.** GitHub creates
-> a `Code scanning results / pr-review-assistant` check and fails it when a PR
-> introduces new alerts — independent of this action's `fail_on`, which stays
-> off. It also posts each alert as its own PR comment, alongside the inline
-> review comments. If you only want the Security tab and not a merge gate,
-> adjust **Settings → Code security → Code scanning → Check failure severity**.
+> **Uploading SARIF adds a second check, and it goes red on any new finding.**
+> A successful run then looks like this:
+>
+> ```
+> ✓  PR Review / review                            Successful
+> ✗  Code scanning results / pr-review-assistant   5 new alerts including 1 high
+> ```
+>
+> The cross is GitHub's, not this action's. It means **findings in your code**,
+> not a failed workflow — and it fires independently of `fail_on`, which stays
+> off. The review comment says so too, so nobody has to infer it.
+>
+> GitHub also posts each alert as its own PR comment, so every finding appears
+> twice: once from this action, once from `github-advanced-security`.
+>
+> To keep the Security tab without the merge gate, set **Settings → Code
+> security → Code scanning → Check failure severity** to **None**.
+>
+> **Teaching a class?** Skip `output_sarif`. The plain quickstart produces a
+> single green check and no duplicate comments, which is one less thing to
+> explain.
 
 Only the reviewer's own findings are uploaded, not raw analyser output. An
 analyser hit the reviewer judged a false positive — a pytest `assert`, an

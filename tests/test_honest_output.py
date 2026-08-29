@@ -220,3 +220,53 @@ class TestReviewBodyCounts:
         body = build_review_body(with_fix, summary="s", pr_url="https://github.com/o/r/pull/1")
         assert "### How to act on this review" in body
         assert "Merging this PR applies nothing" in body
+
+
+class TestCodeScanningNote:
+    """Uploading SARIF makes GitHub add a second check that fails on new alerts,
+    so a successful run shows a green tick and a red cross. The cross reads as a
+    broken pipeline unless the review says otherwise."""
+
+    def _finding(self):
+        return AgentFinding(path="app.py", line=2, title="t", severity="high",
+                            category="security", source="agent")
+
+    def test_note_appears_when_sarif_is_enabled(self):
+        body = build_review_body([self._finding()], summary="s", sarif_enabled=True)
+        assert "> [!NOTE]" in body
+        assert "Code scanning results" in body
+        assert "not a broken pipeline" in body
+        assert "Security → Code scanning" in body
+
+    def test_note_absent_by_default(self):
+        """Emitting it without SARIF would describe a check that does not exist."""
+        body = build_review_body([self._finding()], summary="s")
+        assert "Code scanning results" not in body
+        assert "[!NOTE]" not in body
+
+    def test_note_absent_when_explicitly_disabled(self):
+        body = build_review_body([self._finding()], summary="s", sarif_enabled=False)
+        assert "Code scanning results" not in body
+
+    def test_note_is_informational_not_alarming(self):
+        """[!NOTE] is blue; [!CAUTION] would be red, compounding the alarm it
+        exists to defuse."""
+        body = build_review_body([self._finding()], summary="s", sarif_enabled=True)
+        note = body.split("> [!NOTE]")[1].split("\n\n")[0]
+        assert "[!CAUTION]" not in note
+        assert "[!WARNING]" not in note
+
+    def test_note_sits_after_the_findings_table(self):
+        """Someone confused by a red check scans the top of the review."""
+        from src.agent.fixes import Fix
+
+        finding = self._finding()
+        finding.fix = Fix(2, 2, "x", valid=True)
+        body = build_review_body([finding], summary="s", sarif_enabled=True,
+                                 pr_url="https://github.com/o/r/pull/1")
+        assert body.index("### Findings") < body.index("> [!NOTE]")
+        assert body.index("> [!NOTE]") < body.index("### How to act on this review")
+
+    def test_note_renders_without_any_findings(self):
+        body = build_review_body([], summary="Clean.", sarif_enabled=True)
+        assert "> [!NOTE]" in body

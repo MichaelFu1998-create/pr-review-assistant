@@ -334,6 +334,9 @@ def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_na
         observations=observations,
         analyser_findings=analyser_findings,
         pr_url=pr_url,
+        # Only when SARIF is actually uploaded; otherwise the note would
+        # describe a check that does not exist.
+        sarif_enabled=bool(config.output_sarif),
     )
 
     if comments or result.findings or result.summary:
