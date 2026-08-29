@@ -180,7 +180,7 @@ def run_pipeline_review(config, llm, llm_config, repo, pull, files):
                 }
 
     # Run quality checks
-    quality_observations = check_pr_quality(pull, n_files) if "education" in config.focus_areas else []
+    quality_observations = check_pr_quality(pull, n_files)
     test_observations = analyze_test_coverage(changed_filenames, workspace)
     hygiene_observations = check_git_hygiene(pull, files, workspace)
 
@@ -233,9 +233,7 @@ def run_pipeline_review(config, llm, llm_config, repo, pull, files):
     # Post review (with fallback to a summary review if GitHub rejects the
     # inline comments — e.g. unresolvable paths or rate-limited submissions).
     if comments:
-        review_body = format_review_body(
-            len(comments), tools_used, total_findings, config.review_persona,
-        )
+        review_body = format_review_body(len(comments), tools_used, total_findings)
         safe_create_review(pull, review_body, comments)
     else:
         logger.info("No review comments to post")
@@ -309,7 +307,7 @@ def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_na
     # has no reason to look for.
     changed = list(files.keys())
     observations = {
-        "PR Quality": check_pr_quality(pull, len(files)) if "education" in config.focus_areas else [],
+        "PR Quality": check_pr_quality(pull, len(files)),
         "Test Coverage": analyze_test_coverage(changed, workspace),
         "Git Hygiene": check_git_hygiene(pull, files, workspace),
     }

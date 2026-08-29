@@ -70,9 +70,10 @@ inputs:
   reasoning_effort:
     description: >-
       Depth/cost dial for reasoning models such as grok-4.6:
-      low, medium, high, or xhigh. Empty leaves it to the provider.
+      low, medium, high, or xhigh. Dropped automatically on models that
+      do not accept it.
     required: false
-    default: ""
+    default: "medium"
   api_base_url:
     description: "Custom base URL for an OpenAI-compatible API (Ollama, vLLM, Azure)"
     required: false
@@ -124,11 +125,7 @@ inputs:
 
   # --- Review Settings ---
   review_focus:
-    description: "security, quality, performance, education, all. Empty uses .pr-review.json, else 'all'."
-    required: false
-    default: ""
-  review_persona:
-    description: "normal, mentor, or security-auditor. Empty uses .pr-review.json, else 'normal'."
+    description: "security, quality, performance, or all. Empty uses .pr-review.json, else 'all'."
     required: false
     default: ""
   custom_instructions:
@@ -136,7 +133,7 @@ inputs:
     required: false
     default: ""
   enable_scoring:
-    description: "Add a 0-25 educational score to the review (true/false)."
+    description: "Add a 0-25 score across correctness, security, testing, performance and maintainability (true/false)."
     required: false
     default: ""
 
@@ -193,7 +190,6 @@ runs:
     INPUT_TOOLS: ${{ inputs.tools }}
     INPUT_SEVERITY_THRESHOLD: ${{ inputs.severity_threshold }}
     INPUT_REVIEW_FOCUS: ${{ inputs.review_focus }}
-    INPUT_REVIEW_PERSONA: ${{ inputs.review_persona }}
     INPUT_CUSTOM_INSTRUCTIONS: ${{ inputs.custom_instructions }}
     INPUT_ENABLE_SCORING: ${{ inputs.enable_scoring }}
     INPUT_OUTPUT_SARIF: ${{ inputs.output_sarif }}
