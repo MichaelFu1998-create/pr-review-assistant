@@ -349,6 +349,81 @@ class TestApplyableFixes:
         assert "```suggestion" not in " ".join(c["body"] for c in posted["comments"])
 
 
+class TestAnalyserFindingsStayInTheSummary:
+    """Regression for testbed#1: analyser hits inflated the counts and, once
+    their paths were fixed, would have flooded the PR with duplicate comments."""
+
+    def _harness_with_analysers(self, harness, monkeypatch):
+        from src.tools.base import Finding
+
+        monkeypatch.setattr(
+            main_module,
+            "run_prepass",
+            lambda *a, **k: (
+                [
+                    Finding(
+                        file="app.py", line=8, severity="high", category="security",
+                        rule_id="B608", message="hardcoded sql", tool="bandit",
+                    ),
+                    Finding(
+                        file="app.py", line=99, severity="low", category="quality",
+                        rule_id="E501", message="line too long", tool="ruff",
+                    ),
+                ],
+                ["bandit", "ruff"],
+            ),
+        )
+        return harness
+
+    def _script(self):
+        return [
+            turn(
+                call(
+                    "post_finding", _id="c1",
+                    path="app.py", line=8, severity="critical", category="security",
+                    cwe="CWE-89", title="SQL injection in get_user",
+                    body="Concatenated input.", confidence="high",
+                    fix_start_line=8, fix_end_line=8,
+                    fix_replacement='    cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))',
+                )
+            ),
+            turn(call("finish", _id="c2", summary="One critical issue.")),
+        ]
+
+    def test_analyser_hits_produce_no_inline_comments(self, harness, monkeypatch):
+        posted, _ = _run(self._harness_with_analysers(harness, monkeypatch),
+                         script=self._script())
+        assert len(posted["comments"]) == 1
+        assert "bandit" not in " ".join(c["body"] for c in posted["comments"])
+
+    def test_colocated_analyser_hit_is_deduplicated(self, harness, monkeypatch):
+        """bandit's B608 sits on the same line the agent already explained."""
+        posted, _ = _run(self._harness_with_analysers(harness, monkeypatch),
+                         script=self._script())
+        assert "B608" not in posted["body"]
+
+    def test_remaining_hits_appear_in_the_summary_table(self, harness, monkeypatch):
+        posted, _ = _run(self._harness_with_analysers(harness, monkeypatch),
+                         script=self._script())
+        assert "### Static analysis" in posted["body"]
+        assert "Plus 1 static-analysis hit," in posted["body"]
+        assert "E501" in posted["body"]
+
+    def test_severity_table_matches_the_comment_count(self, harness, monkeypatch):
+        posted, _ = _run(self._harness_with_analysers(harness, monkeypatch),
+                         script=self._script())
+        section = posted["body"].split("### Findings")[1].split("###")[0]
+        rows = [ln for ln in section.splitlines() if ln.startswith("| ")]
+        assert len(rows) - 1 == len(posted["comments"])
+
+    def test_how_to_act_block_with_a_real_files_url(self, harness, monkeypatch):
+        posted, _ = _run(self._harness_with_analysers(harness, monkeypatch),
+                         script=self._script())
+        assert "### How to act on this review" in posted["body"]
+        assert "https://github.com/owner/repo/pull/42/files" in posted["body"]
+        assert "Merging this PR applies nothing" in posted["body"]
+
+
 class TestDegradedRuns:
     def test_llm_failure_still_posts_what_it_had(self, harness):
         repo, posted = harness

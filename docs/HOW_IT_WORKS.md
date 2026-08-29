@@ -187,6 +187,22 @@ The author gets an **Apply suggestion** button. Applying one makes a commit;
 batching several makes one commit for all of them. That is accept/reject per
 edit, and it is native to the PR interface — **the tool never pushes code.**
 
+**GitHub owns those controls, not us.** We emit markdown; GitHub decides which
+buttons to draw. There is no API to restyle them, add a red "Deny", or change
+what they do. Two consequences worth knowing:
+
+- Batching only works in the **Files changed** tab. The button renders in the
+  Conversation tab but refuses to run there, so the summary links to the right
+  tab.
+- There is no reject control. **Resolve conversation** is the closest thing —
+  it marks a thread handled without touching the code — and doing nothing has
+  the identical effect. The summary spells this out, because "Resolve" reads
+  like a decision about the code when it is only thread state.
+
+And the failure mode worth stating loudest: **merging applies nothing.**
+Unapplied suggestions are discarded when the PR merges. The review says so
+explicitly whenever it offers a fix.
+
 That last part is a security property, not a convenience. The agent reads
 untrusted repository contents, which can contain text addressed at the reviewer.
 If the agent could commit, a prompt injection could land code in your branch. A

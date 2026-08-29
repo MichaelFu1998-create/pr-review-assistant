@@ -278,7 +278,7 @@ def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_na
     from .agent.budget import Budget
     from .agent.context import PRMetadata, ReviewContext
     from .agent.single import run_single_agent
-    from .output.comments import build_inline_comments
+    from .output.comments import build_inline_comments, split_by_source
     from .output.gating import should_fail
     from .output.json_report import build_report, write_report
     from .output.sarif import write_sarif
@@ -314,9 +314,18 @@ def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_na
         "Git Hygiene": check_git_hygiene(pull, files, workspace),
     }
 
-    comments, unanchored = build_inline_comments(result.findings, context.diff)
+    # Only the agent's findings become inline comments. Analyser hits it already
+    # validated and re-reported would otherwise comment twice on the same line.
+    agent_findings, analyser_findings = split_by_source(result.findings)
+    comments, unanchored = build_inline_comments(agent_findings, context.diff)
+
+    pr_url = (
+        f"https://github.com/{repo_name}/pull/{config.github_pr_id}"
+        if repo_name and config.github_pr_id
+        else ""
+    )
     review_body = build_review_body(
-        findings=result.findings,
+        findings=agent_findings,
         summary=result.summary,
         scores=result.scores,
         unanchored=unanchored,
@@ -325,6 +334,8 @@ def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_na
         agent_mode=config.agent_mode,
         model=config.openai_model,
         observations=observations,
+        analyser_findings=analyser_findings,
+        pr_url=pr_url,
     )
 
     if comments or result.findings or result.summary:

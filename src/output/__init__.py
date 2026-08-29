@@ -4,7 +4,13 @@ All of these are pure functions of the finding list, which is why inline
 comments, SARIF, the JSON report, and severity gating cost no extra LLM tokens.
 """
 
-from .comments import build_inline_comments, encode_path, format_finding_body
+from .comments import (
+    build_inline_comments,
+    encode_path,
+    format_finding_body,
+    is_agent_finding,
+    split_by_source,
+)
 from .gating import should_fail, parse_fail_on
 from .json_report import build_report, write_report
 from .sarif import build_sarif, write_sarif
@@ -19,6 +25,8 @@ __all__ = [
     "encode_path",
     "format_finding_body",
     "format_severity_table",
+    "is_agent_finding",
+    "split_by_source",
     "parse_fail_on",
     "severity_counts",
     "should_fail",
