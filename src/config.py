@@ -4,7 +4,6 @@ import json
 import os
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +32,14 @@ class Config:
     tools: str = "auto"
     severity_threshold: str = "low"
 
+    # Agent settings (v2)
+    agent_mode: str = "pipeline"        # pipeline (v1) | single | multi
+    max_agent_steps: int = 25
+    max_agent_tokens: int = 150_000
+    max_agent_seconds: float = 600.0
+    max_findings: int = 100
+    specialists: str = ""               # multi mode; empty means all
+
     # Review settings
     review_focus: str = "all"
     review_persona: str = "normal"
@@ -54,6 +61,10 @@ class Config:
         if self.tools in ("auto", "none"):
             return []
         return [t.strip() for t in self.tools.split(",")]
+
+    @property
+    def specialists_list(self) -> list[str]:
+        return [s.strip() for s in self.specialists.split(",") if s.strip()]
 
     @property
     def focus_areas(self) -> list[str]:
@@ -84,6 +95,12 @@ def load_config() -> Config:
         max_files=int(_env("MAX_FILES", "10")),
         tools=_env("TOOLS", "auto"),
         severity_threshold=_env("SEVERITY_THRESHOLD", "low"),
+        agent_mode=_env("AGENT_MODE", "pipeline"),
+        max_agent_steps=int(_env("MAX_AGENT_STEPS", "25")),
+        max_agent_tokens=int(_env("MAX_AGENT_TOKENS", "150000")),
+        max_agent_seconds=float(_env("MAX_AGENT_SECONDS", "600")),
+        max_findings=int(_env("MAX_FINDINGS", "100")),
+        specialists=_env("SPECIALISTS", ""),
         review_focus=_env("REVIEW_FOCUS", "all"),
         review_persona=_env("REVIEW_PERSONA", "normal"),
         custom_instructions=_env("CUSTOM_INSTRUCTIONS", ""),

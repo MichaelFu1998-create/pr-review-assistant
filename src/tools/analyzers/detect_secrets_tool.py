@@ -27,11 +27,6 @@ class DetectSecretsTool(BaseTool):
         return files
 
     def run(self, files: list[str], workspace: str, config: dict) -> ToolResult:
-        cmd = [
-            "detect-secrets", "scan",
-            "--list-all-plugins",
-        ]
-        # Scan specific files
         scan_cmd = ["detect-secrets", "scan"] + files
 
         try:
