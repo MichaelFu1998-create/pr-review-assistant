@@ -38,12 +38,11 @@ class Config:
     max_agent_tokens: int = 150_000
     max_agent_seconds: float = 600.0
     max_findings: int = 100
-    reasoning_effort: str = ""           # xAI/OpenAI reasoning models: low|medium|high|xhigh
+    reasoning_effort: str = "medium"     # reasoning models: low|medium|high|xhigh
     suggest_fixes: bool = True           # render applyable GitHub suggestions
 
     # Review settings
     review_focus: str = "all"
-    review_persona: str = "normal"
     custom_instructions: str = ""
     enable_scoring: bool = False
 
@@ -71,7 +70,7 @@ class Config:
     @property
     def focus_areas(self) -> list[str]:
         if self.review_focus == "all":
-            return ["security", "quality", "performance", "education"]
+            return ["security", "quality", "performance"]
         return [f.strip() for f in self.review_focus.split(",")]
 
 
@@ -91,7 +90,6 @@ OVERRIDABLE_DEFAULTS: dict[str, object] = {
     "tools": "auto",
     "severity_threshold": "low",
     "review_focus": "all",
-    "review_persona": "normal",
     "max_files": 10,
 }
 
@@ -160,7 +158,7 @@ def load_config() -> Config:
         max_agent_tokens=int(_env("MAX_AGENT_TOKENS", "") or "150000"),
         max_agent_seconds=float(_env("MAX_AGENT_SECONDS", "") or "600"),
         max_findings=int(_env("MAX_FINDINGS", "") or "100"),
-        reasoning_effort=_env("REASONING_EFFORT", ""),
+        reasoning_effort=_env("REASONING_EFFORT", "") or "medium",
         suggest_fixes=(_env("SUGGEST_FIXES", "") or "true").lower() == "true",
         custom_instructions=_env("CUSTOM_INSTRUCTIONS", ""),
         output_sarif=_env("OUTPUT_SARIF", ""),
@@ -171,7 +169,6 @@ def load_config() -> Config:
         tools=_env("TOOLS", ""),
         severity_threshold=_env("SEVERITY_THRESHOLD", ""),
         review_focus=_env("REVIEW_FOCUS", ""),
-        review_persona=_env("REVIEW_PERSONA", ""),
         max_files=int(_env("MAX_FILES", "") or "0"),
         enable_scoring=_env("ENABLE_SCORING", "").lower() == "true",
     )
@@ -219,9 +216,6 @@ def _merge_repo_config(config: Config, repo_config: dict) -> None:
     if _env("REVIEW_FOCUS") == "" and "focus" in review_section:
         focus = review_section["focus"]
         config.review_focus = ",".join(focus) if isinstance(focus, list) else focus
-
-    if _env("REVIEW_PERSONA") == "" and "persona" in review_section:
-        config.review_persona = review_section["persona"]
 
     if _env("CUSTOM_INSTRUCTIONS") == "" and "custom_instructions" in review_section:
         config.custom_instructions = review_section["custom_instructions"]

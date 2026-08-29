@@ -47,7 +47,6 @@ def format_review_body(
     file_count: int,
     tools_used: list[str],
     total_findings: int,
-    persona: str,
 ) -> str:
     """Format the top-level review body."""
     parts = ["**Automated Code Review**\n"]
@@ -58,7 +57,5 @@ def format_review_body(
         tools_str = ", ".join(tools_used)
         parts.append(f" | Tools: {tools_str}")
         parts.append(f" | {total_findings} static analysis finding(s)")
-
-    parts.append(f" | Mode: {persona}")
 
     return "".join(parts)

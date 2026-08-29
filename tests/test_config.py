@@ -26,7 +26,6 @@ class TestDefaults:
         config = load_config()
         assert config.tools == "auto"
         assert config.review_focus == "all"
-        assert config.review_persona == "normal"
         assert config.severity_threshold == "low"
         assert config.max_files == 10
         assert config.agent_mode == "agent"
@@ -35,10 +34,9 @@ class TestDefaults:
         """The Action always sets every INPUT_ var, empty when unspecified."""
         monkeypatch.setenv("INPUT_TOOLS", "")
         monkeypatch.setenv("INPUT_MAX_FILES", "")
-        monkeypatch.setenv("INPUT_REVIEW_PERSONA", "")
         config = load_config()
         assert config.tools == "auto" and config.max_files == 10
-        assert config.review_persona == "normal"
+        assert config.review_focus == "all"
 
 
 class TestRepoConfigPrecedence:
@@ -48,24 +46,22 @@ class TestRepoConfigPrecedence:
 
     def test_repo_config_applies_when_the_input_is_empty(self, workspace, monkeypatch):
         monkeypatch.setenv("INPUT_TOOLS", "")
-        monkeypatch.setenv("INPUT_REVIEW_PERSONA", "")
         write_repo_config(
             workspace,
             {
                 "tools": {"enabled": ["semgrep", "bandit"]},
-                "review": {"persona": "mentor", "focus": ["security"], "max_files": 3},
+                "review": {"focus": ["security"], "max_files": 3},
             },
         )
         config = load_config()
         assert config.tools == "semgrep,bandit"
-        assert config.review_persona == "mentor"
         assert config.review_focus == "security"
         assert config.max_files == 3
 
     def test_explicit_action_input_beats_repo_config(self, workspace, monkeypatch):
-        monkeypatch.setenv("INPUT_REVIEW_PERSONA", "security-auditor")
-        write_repo_config(workspace, {"review": {"persona": "mentor"}})
-        assert load_config().review_persona == "security-auditor"
+        monkeypatch.setenv("INPUT_REVIEW_FOCUS", "performance")
+        write_repo_config(workspace, {"review": {"focus": ["security"]}})
+        assert load_config().review_focus == "performance"
 
     def test_tool_configs_always_apply(self, workspace):
         write_repo_config(
@@ -101,7 +97,7 @@ class TestDerivedProperties:
 
     def test_focus_areas_expands_all(self, workspace):
         assert set(load_config().focus_areas) == {
-            "security", "quality", "performance", "education",
+            "security", "quality", "performance",
         }
 
     def test_agent_mode_aliases(self, workspace, monkeypatch):
@@ -199,3 +195,33 @@ class TestProviderNeutralNames:
         assert config.openai_api_key == "sk-x"
         assert config.anthropic_api_key == "sk-ant-x"
         assert config.xai_api_key == "xai-x"
+
+
+class TestReasoningEffort:
+    def test_defaults_to_medium(self, workspace):
+        assert load_config().reasoning_effort == "medium"
+
+    def test_explicit_value_wins(self, workspace, monkeypatch):
+        monkeypatch.setenv("INPUT_REASONING_EFFORT", "high")
+        assert load_config().reasoning_effort == "high"
+
+    def test_empty_input_falls_back_to_medium(self, workspace, monkeypatch):
+        monkeypatch.setenv("INPUT_REASONING_EFFORT", "")
+        assert load_config().reasoning_effort == "medium"
+
+
+class TestNoPersonas:
+    """review_persona is gone: this is a code review tool, not a teaching mode."""
+
+    def test_config_has_no_persona_field(self, workspace):
+        assert not hasattr(load_config(), "review_persona")
+
+    def test_education_is_not_a_focus_area(self, workspace):
+        assert "education" not in load_config().focus_areas
+
+    def test_repo_config_persona_is_ignored_not_fatal(self, workspace):
+        """An old .pr-review.json must not break the run."""
+        write_repo_config(workspace, {"review": {"persona": "mentor", "focus": ["security"]}})
+        config = load_config()
+        assert config.review_focus == "security"
+        assert not hasattr(config, "review_persona")

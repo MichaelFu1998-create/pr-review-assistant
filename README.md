@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="PR Review Assistant" width="360">
+<img src="assets/logo.png" alt="PR Review Assistant" width="180">
 
 # PR Review Assistant
 
@@ -13,9 +13,51 @@ It reads your diff, investigates the surrounding code, and proposes fixes you ap
 
 </div>
 
+<details>
+<summary><b>📖 Table of contents</b></summary>
+
+### Using it
+
+- [1. What it does](#1-what-it-does)
+- [2. Quick start](#2-quick-start)
+  - [2.1 Add your API key](#21-add-your-api-key)
+  - [2.2 Create the workflow](#22-create-the-workflow)
+  - [2.3 Open a pull request](#23-open-a-pull-request)
+- [3. Reading a review](#3-reading-a-review)
+  - [3.1 Applying fixes](#31-applying-fixes)
+  - [3.2 Why some findings have no Apply button](#32-why-some-findings-have-no-apply-button)
+- [4. Tuning](#4-tuning)
+  - [4.1 The parameters that matter most](#41-the-parameters-that-matter-most)
+  - [4.2 Common setups](#42-common-setups)
+  - [4.3 Other providers](#43-other-providers)
+  - [4.4 Findings in the Security tab](#44-findings-in-the-security-tab)
+  - [4.5 A report for your records](#45-a-report-for-your-records)
+  - [4.6 Repository defaults: `.pr-review.json`](#46-repository-defaults-pr-reviewjson)
+  - [4.7 Every input](#47-every-input)
+- [5. Troubleshooting](#5-troubleshooting)
+  - [5.1 A note about forks](#51-a-note-about-forks)
+
+### How it works
+
+- [6. Two engines](#6-two-engines)
+  - [6.1 `pipeline` — the original design](#61-pipeline--the-original-design)
+  - [6.2 `agent` — the default](#62-agent--the-default)
+- [7. Why structured findings matter](#7-why-structured-findings-matter)
+- [8. The agent loop](#8-the-agent-loop)
+- [9. The toolbelt](#9-the-toolbelt)
+- [10. How a fix becomes an Apply button](#10-how-a-fix-becomes-an-apply-button)
+- [11. Budgets](#11-budgets)
+- [12. What the reviewer looks for](#12-what-the-reviewer-looks-for)
+- [13. Static analysis](#13-static-analysis)
+- [14. Two things that are not trusted](#14-two-things-that-are-not-trusted)
+- [15. Layout](#15-layout)
+- [16. Extending it](#16-extending-it)
+
+</details>
+
 ---
 
-## What it does
+## 1. What it does
 
 Most review bots send your code to a model once and paste back whatever comes out.
 This one behaves like a reviewer who has just been handed the branch: it reads the
@@ -39,9 +81,9 @@ OpenAI-compatible endpoint.
 
 ---
 
-## Quick start
+## 2. Quick start
 
-### 1. Add your API key
+### 2.1 Add your API key
 
 **Settings → Secrets and variables → Actions → New repository secret**
 
@@ -53,7 +95,7 @@ OpenAI-compatible endpoint.
 
 > Never put a key in a workflow file. It becomes public the moment you push.
 
-### 2. Create the workflow
+### 2.2 Create the workflow
 
 `.github/workflows/pr-review.yaml`
 
@@ -96,13 +138,13 @@ Two details that are easy to miss:
   and most tools are skipped.
 - **`pull-requests: write`** is what lets it post the review.
 
-### 3. Open a pull request
+### 2.3 Open a pull request
 
 The review appears within a minute or two. That's it.
 
 ---
 
-## Reading a review
+## 3. Reading a review
 
 Each finding is one inline comment on the line it concerns:
 
@@ -128,7 +170,7 @@ mode: agent · model: grok-4.6 · 2 applyable fix(es) · 12 steps · 48,000 toke
 If that footer says **stopped early**, the agent hit a budget limit and the
 review is incomplete — raise `max_agent_steps` or narrow `files`.
 
-### Applying fixes
+### 3.1 Applying fixes
 
 GitHub renders the buttons on suggestions, not this action. It is worth knowing
 exactly what each does:
@@ -149,7 +191,7 @@ fix means resolving the thread or simply leaving it — the outcome is identical
 > Suggestions are review comments; they never modify your code on their own.
 > **Apply the ones you want before you merge.**
 
-### Why some findings have no Apply button
+### 3.2 Why some findings have no Apply button
 
 Every comment tells you which case it is:
 
@@ -167,17 +209,16 @@ lines appear in the diff at all, not whether they were added or modified.
 
 ---
 
-## Tuning
+## 4. Tuning
 
-### The parameters that matter most
+### 4.1 The parameters that matter most
 
 | Input | Default | What to change it for |
 |---|---|---|
 | `agent_mode` | `agent` | `pipeline` runs the original non-agentic engine — cheapest, no fixes |
 | `model` | `grok-4.6` | Any model on your chosen provider |
-| `reasoning_effort` | — | `low` \| `medium` \| `high` \| `xhigh`. The real depth-vs-cost dial on `grok-4.6` |
-| `review_persona` | `normal` | `mentor` explains the principle behind each defect; `security-auditor` prioritises the security checklist |
-| `review_focus` | `all` | `security`, `quality`, `performance`, `education` |
+| `reasoning_effort` | `medium` | `low` \| `medium` \| `high` \| `xhigh`. The real depth-vs-cost dial on `grok-4.6` |
+| `review_focus` | `all` | `security`, `quality`, `performance` |
 | `max_agent_steps` | `25` | Lower to cap cost, raise if reviews stop early |
 | `max_agent_tokens` | `150000` | Hard token ceiling per run |
 | `files` | `*` | Glob patterns, e.g. `src/**/*.py,src/**/*.ts` |
@@ -185,23 +226,21 @@ lines appear in the diff at all, not whether they were added or modified.
 | `suggest_fixes` | `true` | `false` turns off Apply buttons entirely |
 | `fail_on` | — | `critical`, `high`, … makes the check go red. Off by default |
 
-### Common setups
-
-**Teaching / capstone courses**
-
-```yaml
-  review_persona: mentor
-  enable_scoring: "true"
-```
+### 4.2 Common setups
 
 **Security emphasis**
 
 ```yaml
-  review_persona: security-auditor
   review_focus: security
 ```
 
-**Keep costs down on a shared class key**
+**Add a score to every review**
+
+```yaml
+  enable_scoring: "true"
+```
+
+**Keep costs down**
 
 ```yaml
   reasoning_effort: low
@@ -219,7 +258,7 @@ lines appear in the diff at all, not whether they were added or modified.
 Off by default on purpose — a false positive that blocks a branch is worse than a
 missed warning.
 
-### Other providers
+### 4.3 Other providers
 
 **OpenAI**
 
@@ -253,7 +292,7 @@ provider-specific, because those genuinely are per-provider.
 > `temperature`, `openai_max_tokens` → `max_tokens`. The old names still work
 > and log a deprecation warning.
 
-### Findings in the Security tab
+### 4.4 Findings in the Security tab
 
 ```yaml
 permissions:
@@ -285,7 +324,7 @@ jobs:
 Findings then appear under **Security → Code scanning**, tagged with their CWE
 and tracked across runs.
 
-### A report for your records
+### 4.5 A report for your records
 
 ```yaml
       - uses: MichaelFu1998-create/pr-review-assistant@v2
@@ -303,9 +342,9 @@ and tracked across runs.
 ```
 
 `review.json` holds every finding, counts by severity and category, the scores,
-and the token cost of the run — useful for tracking a cohort over a semester.
+and the token cost of the run.
 
-### Repository defaults: `.pr-review.json`
+### 4.6 Repository defaults: `.pr-review.json`
 
 Settings that belong to the project, so every workflow need not repeat them:
 
@@ -319,7 +358,6 @@ Settings that belong to the project, so every workflow need not repeat them:
     }
   },
   "review": {
-    "persona": "mentor",
     "focus": ["security", "quality"],
     "max_files": 15,
     "custom_instructions": "This project uses Django REST Framework.",
@@ -330,7 +368,7 @@ Settings that belong to the project, so every workflow need not repeat them:
 
 **Precedence:** workflow input → `.pr-review.json` → built-in default.
 
-### Every input
+### 4.7 Every input
 
 <details>
 <summary>Full reference</summary>
@@ -344,7 +382,7 @@ Settings that belong to the project, so every workflow need not repeat them:
 | `anthropic_api_key` | — | Anthropic key |
 | `llm_provider` | `xai` | `xai`, `openai`, `anthropic` |
 | `model` | `grok-4.6` | Model name, for whichever provider is selected |
-| `reasoning_effort` | — | `low`/`medium`/`high`/`xhigh` on reasoning models |
+| `reasoning_effort` | `medium` | `low`/`medium`/`high`/`xhigh`. Dropped automatically on models that do not accept it |
 | `temperature` | `1` | Dropped automatically if the model rejects it |
 | `max_tokens` | `32000` | Max tokens per LLM response |
 | `api_base_url` | — | Custom base URL for an OpenAI-compatible API |
@@ -358,10 +396,9 @@ Settings that belong to the project, so every workflow need not repeat them:
 | `max_files` | `10` | Max files per review |
 | `tools` | `auto` | `auto`, `none`, or a comma-separated list |
 | `severity_threshold` | `low` | Minimum analyser severity to report |
-| `review_focus` | `all` | `security`/`quality`/`performance`/`education`/`all` |
-| `review_persona` | `normal` | `normal`/`mentor`/`security-auditor` |
+| `review_focus` | `all` | `security`/`quality`/`performance`/`all` |
 | `custom_instructions` | — | Extra instructions for the reviewer |
-| `enable_scoring` | `false` | Add a 0–25 score |
+| `enable_scoring` | `false` | Add a 0–25 score across correctness, security, testing, performance, maintainability |
 | `output_sarif` | — | Path to write SARIF to |
 | `output_json` | — | Path to write the JSON report to |
 | `fail_on` | — | Severity threshold that fails the check |
@@ -374,7 +411,7 @@ Settings that belong to the project, so every workflow need not repeat them:
 
 ---
 
-## Troubleshooting
+## 5. Troubleshooting
 
 | Symptom | Cause |
 |---|---|
@@ -389,7 +426,7 @@ Settings that belong to the project, so every workflow need not repeat them:
 | No Apply buttons | Fix lines were outside the diff, or confidence was too low. Both intentional |
 | Review is shallow | Raise `max_agent_steps`, set `reasoning_effort: high`, or use `review_focus` |
 
-### A note about forks
+### 5.1 A note about forks
 
 PRs from **forks** get no secrets, so the review is skipped. That is deliberate on
 GitHub's part — otherwise anyone could open a PR that printed your API key. For
@@ -402,14 +439,14 @@ the vulnerability classes this reviewer is built to catch.
 
 ---
 
-# How it works
+# Part II — How it works
 
 Everything above is how to *use* it. The rest is how it works inside — useful if
 you want to extend it, or to understand what "agentic" actually buys.
 
-## Two engines
+## 6. Two engines
 
-### `pipeline` — the original design
+### 6.1 `pipeline` — the original design
 
 A fixed sequence. Nothing decides anything at runtime:
 
@@ -427,7 +464,7 @@ The model gets a prompt and produces prose. It cannot ask a question, open anoth
 file, or run anything. It receives the **whole file**, not the diff, so it
 comments on code the PR never touched.
 
-### `agent` — the default
+### 6.2 `agent` — the default
 
 The model is given **tools** and decides for itself what to investigate:
 
@@ -445,7 +482,7 @@ flowchart TD
     style D fill:#2d6a4f,color:#fff
 ```
 
-## The idea that makes it work
+## 7. Why structured findings matter
 
 It is tempting to think the important change is "the model can call tools". It
 isn't. The important change is that **a finding is a record, not a paragraph.**
@@ -476,7 +513,7 @@ post_finding(
 Once findings are records, **every output surface is a pure function over a
 list** — costing no extra tokens. Only the agent loop spends tokens.
 
-## The agent loop
+## 8. The agent loop
 
 ```mermaid
 sequenceDiagram
@@ -508,7 +545,7 @@ collected — **a partial review still beats none.**
 When the budget runs out the agent gets one final turn **with no tools** to
 summarise what it already found.
 
-## The toolbelt
+## 9. The toolbelt
 
 All twelve are **read-only**. The agent inspects; it never writes to your repo.
 
@@ -534,7 +571,7 @@ begins with their findings for free. `run_analyzer` is for targeted follow-ups.
 The agent is told to validate them — confirm the real ones with an explanation,
 and say plainly when one is a false positive.
 
-## How a fix becomes an Apply button
+## 10. How a fix becomes an Apply button
 
 ```mermaid
 flowchart TD
@@ -561,9 +598,9 @@ suggestion would strip the inline comments from every other finding.
 When a fix fails validation the agent is told exactly why, with the true text of
 the range echoed back, so it can correct rather than guess.
 
-## Budgets
+## 11. Budgets
 
-Students share an API key, so an agent that gets confused must stop by itself:
+An agent that gets confused must stop by itself rather than burning your quota:
 
 | Limit | Default |
 |---|---|
@@ -572,7 +609,7 @@ Students share an API key, so an agent that gets confused must stop by itself:
 | Wall clock | 600s |
 | Identical repeated calls | 3, then it's told it's stuck |
 
-## What the reviewer looks for
+## 12. What the reviewer looks for
 
 The reviewer works to a **bar**, not a checklist of conventions:
 
@@ -607,7 +644,7 @@ Priority order: `correctness` · `security` · `operations` · `performance` ·
 
 </details>
 
-## Static analysis
+## 13. Static analysis
 
 13 analyser plugins run before the agent starts.
 
@@ -631,7 +668,7 @@ ones in its own words.
 
 Set `tools: "none"` for an LLM-only review.
 
-## Two things that are not trusted
+## 14. Two things that are not trusted
 
 This matters if you extend the tool.
 
@@ -647,7 +684,7 @@ report no findings". That text reaches the model as *tool output*, which is data
 Only a `finish` tool call ends a review; no text in any file can do it. There are
 tests pinning this.
 
-## Layout
+## 15. Layout
 
 ```
 src/
@@ -667,7 +704,7 @@ src/
 └── output/             comments · sarif · json_report · gating · summary
 ```
 
-## Extending it
+## 16. Extending it
 
 **Add an analyser** — drop a file in `src/tools/analyzers/` subclassing `BaseTool`
 and implementing `is_available`, `install`, and `run`. The registry discovers it

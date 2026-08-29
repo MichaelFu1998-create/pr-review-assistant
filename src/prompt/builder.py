@@ -8,14 +8,14 @@ from ..llm.base import LLMProvider
 from .templates import (
     DO_NOT_REPORT,
     FOCUS_EMPHASIS,
-    PERSONAS,
     REPORTING_BAR,
+    REVIEWER_ROLE,
     SCORING_PROMPT,
     STANDARDIZED_CHECKLIST,
     detect_language,
 )
 
-ALL_FOCUS_AREAS = {"security", "quality", "performance", "education"}
+ALL_FOCUS_AREAS = {"security", "quality", "performance"}
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +34,8 @@ class PromptParts:
 
 
 def build_system_message(config: Config) -> str:
-    """Build the system message based on the configured persona."""
-    persona = PERSONAS.get(config.review_persona, PERSONAS["normal"])
-    return persona
+    """Build the system message."""
+    return REVIEWER_ROLE
 
 
 def build_user_message(

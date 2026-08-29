@@ -122,29 +122,6 @@ backtracking in a regex, missing rate limits.
 12. **AI/LLM** — prompt injection surface, model output rendered or executed \
 without sanitisation, API keys reachable from client code."""
 
-PERSONA_OVERLAYS = {
-    "normal": (
-        "Keep your tone professional and direct. Be thorough without being "
-        "pedantic."
-    ),
-    "mentor": (
-        "You are reviewing for university capstone students. Explain *why* "
-        "something is a problem and name the underlying principle, so the "
-        "lesson transfers beyond this line of code. Acknowledge good decisions "
-        "specifically rather than generically. Stay encouraging, and never "
-        "condescending — assume the author is capable and simply newer to this.\n\n"
-        "Being a mentor does not mean lowering the bar, and it is not a licence "
-        "to invent gentle style feedback. A student learns more from three real "
-        "defects explained well than from ten remarks about naming."
-    ),
-    "security-auditor": (
-        "Prioritise the security checklist above all else. Treat every input as "
-        "attacker-controlled until you have traced otherwise, and state the CWE "
-        "and realistic impact for each finding. Still report severe correctness "
-        "bugs when you find them."
-    ),
-}
-
 FOCUS_EMPHASIS = {
     "security": (
         "Weight the security checklist above everything else. Treat every input "
@@ -158,13 +135,11 @@ FOCUS_EMPHASIS = {
     ),
 }
 
-ALL_FOCUS_AREAS = {"security", "quality", "performance", "education"}
+ALL_FOCUS_AREAS = {"security", "quality", "performance"}
 
 
 def build_system_prompt(config: Config, extra: str = "") -> str:
-    """Assemble the agent system prompt for the configured persona and focus."""
-    persona = PERSONA_OVERLAYS.get(config.review_persona, PERSONA_OVERLAYS["normal"])
-
+    """Assemble the agent system prompt for the configured focus."""
     parts = [AGENT_ROLE, WORKFLOW, REVIEW_DOMAINS, SECURITY_CHECKLIST]
 
     selected = set(config.focus_areas)
@@ -172,8 +147,6 @@ def build_system_prompt(config: Config, extra: str = "") -> str:
         emphasis = [FOCUS_EMPHASIS[a] for a in config.focus_areas if a in FOCUS_EMPHASIS]
         if emphasis:
             parts.append("## Focus\n\n" + "\n".join(f"- {line}" for line in emphasis))
-
-    parts.append(f"## Tone\n\n{persona}")
 
     if extra:
         parts.append(extra)
