@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check src/ tests/ --select F,E9
+      - name: Test
+        run: pytest tests/ -q
+
+  action-image:
+    # The action ships as a Docker image, so a build failure breaks every
+    # consumer. Nothing else in CI would catch it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the action image
+        run: docker build -t pr-review-assistant:ci .
+      - name: Verify the entrypoint imports
+        run: |
+          docker run --rm --entrypoint python pr-review-assistant:ci -c "
+          import sys; sys.path.insert(0, '/app')
+          from src.main import main
+          from src.agent import run_single_agent, run_multi_agent
+          from src.output import build_sarif, build_report
+          from src.llm.xai_provider import XAIProvider
+          from src.llm.anthropic_provider import AnthropicProvider
+          print('entrypoint and all providers import')
+          "
+      - name: Verify the bundled analysers
+        run: |
+          docker run --rm --entrypoint sh pr-review-assistant:ci -c \
+            "semgrep --version && ruff --version && detect-secrets --version && git --version"

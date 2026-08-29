@@ -2,6 +2,28 @@
 
 Automated PR code review powered by LLM + static analysis tools. Supports multiple languages, review personas, educational scoring, and flexible configuration for diverse tech stacks.
 
+## New in v2: agentic review
+
+v2 adds a reviewer that **investigates** instead of being handed one prompt per
+file. It reads the diff, opens related files, searches for callers, runs
+analysers on demand, and reports each issue as a structured record — which is
+what makes real line anchoring, SARIF, and machine-readable reports possible.
+
+| `agent_mode` | Behaviour | Cost |
+|---|---|---|
+| `pipeline` | v1: one single-shot LLM call per file, no tools. **Default.** | Lowest |
+| `single` | One agent with an 11-tool read-only toolbelt | ~1× |
+| `multi` | Parallel specialists per concern, then aggregation | ~4–8× |
+
+v1 is untouched and remains the default, so you can run both on the same PR and
+compare.
+
+**New:** xAI (Grok) provider · inline comments on the correct line · SARIF for
+the Security tab · `review.json` artifact · optional severity gating.
+
+📖 **[How it works](docs/HOW_IT_WORKS.md)** — what the tool does and why
+🚀 **[Quickstart](docs/QUICKSTART.md)** — get it running in five minutes
+
 ## Features
 
 - **Static analysis integration** — Semgrep, Ruff, Bandit, ESLint, detect-secrets, and more run locally and feed findings into the LLM for context-aware reviews
@@ -9,9 +31,9 @@ Automated PR code review powered by LLM + static analysis tools. Supports multip
 - **Review personas** — Choose between `normal` (balanced), `mentor` (educational), or `security-auditor` modes. All personas share the same standardized 8-category defect checklist, so results are directly comparable; persona only changes tone and emphasis.
 - **Token management** — Smart truncation ensures large files and tool outputs fit within model context windows
 - **Educational scoring** — Optional 0-25 rubric scoring for capstone/course use
-- **Multi-provider LLM support** — OpenAI, Anthropic Claude, or any OpenAI-compatible API
+- **Multi-provider LLM support** — OpenAI, Anthropic Claude, xAI Grok, or any OpenAI-compatible API
 - **Parameterizable** — Per-repo `.pr-review.json` config for fine-grained control
-- **11 tool plugins** — Semgrep, Ruff, Bandit, ESLint, npm audit, PMD, Checkstyle, golangci-lint, Hadolint, ShellCheck, Trivy, Checkov, detect-secrets
+- **13 tool plugins** — Semgrep, Ruff, Bandit, ESLint, npm audit, PMD, Checkstyle, golangci-lint, Hadolint, ShellCheck, Trivy, Checkov, detect-secrets
 
 ## Quick Start
 
