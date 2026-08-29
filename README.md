@@ -11,15 +11,24 @@ what makes real line anchoring, SARIF, and machine-readable reports possible.
 
 | `agent_mode` | Behaviour | Cost |
 |---|---|---|
-| `pipeline` | v1: one single-shot LLM call per file, no tools. **Default.** | Lowest |
-| `single` | One agent with an 11-tool read-only toolbelt | ~1× |
-| `multi` | Parallel specialists per concern, then aggregation | ~4–8× |
+| `agent` | **Default.** One agent with a 12-tool read-only toolbelt | ~1× |
+| `pipeline` | v1: one single-shot LLM call per file, no tools | Lowest |
 
-v1 is untouched and remains the default, so you can run both on the same PR and
+v1 is untouched and still selectable, so you can run both on the same PR and
 compare.
 
-**New:** xAI (Grok) provider · inline comments on the correct line · SARIF for
-the Security tab · `review.json` artifact · optional severity gating.
+**Applyable fixes.** For high-confidence issues the reviewer attaches a GitHub
+**suggested change**, so you get an *Apply* button per fix — commit them one at
+a time or batch them into one commit. The tool never pushes to your branch: a
+fix cannot land without your click.
+
+**Also new:** xAI Grok is the default provider (`grok-4.6`) · inline comments on
+the correct line · SARIF for the Security tab · `review.json` artifact ·
+optional severity gating.
+
+**Sharper reviews.** The old checklist asked about naming, brackets and
+indentation. It now works to a bar — state the trigger, the failure and the
+consequence, or say nothing — with formatting and naming explicitly off-limits.
 
 📖 **[How it works](docs/HOW_IT_WORKS.md)** — what the tool does and why
 🚀 **[Quickstart](docs/QUICKSTART.md)** — get it running in five minutes
@@ -94,7 +103,7 @@ Place in your repo root:
 | `openai_api_key` | Yes | — | OpenAI API key |
 | `github_token` | Yes | — | GitHub token with PR write access |
 | `github_pr_id` | Yes | — | PR number to review |
-| `openai_model` | No | `gpt-5.4-mini-2026-03-17` | LLM model name |
+| `openai_model` | No | `grok-4.6` | LLM model name, for whichever provider is selected |
 | `openai_temperature` | No | `1` | Sampling temperature [0, 1] |
 | `openai_max_tokens` | No | `32000` | Max response tokens |
 | `llm_provider` | No | `openai` | `openai`, `anthropic` |
@@ -169,7 +178,7 @@ Enable with `enable_scoring: "true"`. The LLM scores each PR on:
 
 ```yaml
 openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-openai_model: "gpt-5.4-mini-2026-03-17"
+openai_model: "grok-4.6"
 ```
 
 ### Anthropic Claude

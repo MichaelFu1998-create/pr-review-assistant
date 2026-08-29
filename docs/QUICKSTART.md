@@ -13,8 +13,8 @@ Add whichever your instructor gave you:
 
 | Provider | Secret name | Get a key from |
 |---|---|---|
+| **xAI (Grok)** — default | `XAI_API_KEY` | console.x.ai |
 | OpenAI | `OPENAI_API_KEY` | platform.openai.com |
-| xAI (Grok) | `XAI_API_KEY` | console.x.ai |
 | Anthropic | `ANTHROPIC_API_KEY` | console.anthropic.com |
 
 > Never put a key in a workflow file. It becomes public the moment you push.
@@ -51,9 +51,11 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           github_pr_id: ${{ github.event.pull_request.number }}
-          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-          agent_mode: single
+          xai_api_key: ${{ secrets.XAI_API_KEY }}
 ```
+
+That is the whole configuration. It defaults to `grok-4.6` in agent mode with
+suggested fixes on.
 
 Two details that are easy to miss:
 
@@ -70,30 +72,47 @@ The review appears as comments within a minute or two. That's it.
 
 ---
 
+## Applying suggested fixes
+
+For issues it is confident about, the reviewer attaches a **suggested change**.
+In the PR you will see the fix in a green block with a button:
+
+- **Apply suggestion** — commits that one fix on its own.
+- **Add suggestion to batch** — collect several, then **Commit suggestions**
+  applies them all in a single commit.
+
+So you accept the fixes you want and simply ignore the rest. Nothing is
+committed unless you click; the reviewer never pushes to your branch.
+
+Fixes only appear where the reviewer is confident *and* the lines are part of
+your diff — that is a GitHub constraint, not a choice. Everything else arrives
+as a plain code block you can copy.
+
+Turn it off with `suggest_fixes: "false"`.
+
 ## Choosing a mode
 
 | `agent_mode` | What it does | Cost |
 |---|---|---|
-| `pipeline` | The original: one LLM call per file, no tools | Lowest |
-| `single` | **Recommended.** One agent that investigates with tools | ~1× |
-| `multi` | Parallel specialists per concern, then aggregation | ~4–8× |
+| `agent` | **Default.** An agent that investigates with tools and proposes fixes | ~1× |
+| `pipeline` | The original v1 engine: one LLM call per file, no tools, no fixes | Lowest |
 
-Start with `single`. Use `multi` on a PR that matters. Use `pipeline` if you
-want to see what the tool looked like before it was agentic.
+Use `pipeline` only if you want to see what the tool looked like before it was
+agentic — it is kept for comparison.
 
 ---
 
 ## Using a different provider
 
-**xAI (Grok):**
+**OpenAI:**
 
 ```yaml
 with:
   github_token: ${{ secrets.GITHUB_TOKEN }}
   github_pr_id: ${{ github.event.pull_request.number }}
-  llm_provider: xai
-  xai_api_key: ${{ secrets.XAI_API_KEY }}
-  openai_model: grok-4
+  llm_provider: openai
+  openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+  openai_model: gpt-5.4-mini-2026-03-17
 ```
 
 **Anthropic:**
@@ -109,6 +128,10 @@ with:
 
 `openai_model` is the model name for every provider — the input keeps its old
 name for backward compatibility.
+
+On `grok-4.6` you can also set `reasoning_effort` to `low`, `medium`, `high`, or
+`xhigh`. It is the real depth-versus-cost dial for that model; leave it unset to
+take the provider default.
 
 ---
 
@@ -167,8 +190,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           github_pr_id: ${{ github.event.pull_request.number }}
-          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-          agent_mode: single
+          xai_api_key: ${{ secrets.XAI_API_KEY }}
           output_sarif: pr-review.sarif
 
       - uses: github/codeql-action/upload-sarif@v3
@@ -268,7 +290,8 @@ of the vulnerability classes this reviewer is built to catch.
 | "Repository not checked out" warning | Add `actions/checkout` before the action |
 | Footer says **stopped early** | Budget hit; raise `max_agent_steps` or narrow `files` |
 | Analysers skipped | Add `fetch-depth: 0` to checkout |
-| Review is shallow | Try `agent_mode: multi`, or `review_focus` to concentrate it |
+| No Apply buttons | The fix lines were outside your diff, or the reviewer was not confident enough. Both are intentional |
+| Review is shallow | Raise `max_agent_steps`, set `reasoning_effort: high`, or use `review_focus` |
 
 ---
 

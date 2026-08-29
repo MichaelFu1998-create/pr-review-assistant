@@ -26,11 +26,11 @@ not the diff, so it frequently comments on code the PR never touched. Every
 comment is attached to line 1 of the file, because the code had no way to know
 which line a piece of prose was about.
 
-This mode still exists, unchanged, and is still the default. Keeping it lets you
-run both engines on the same PR and compare them, which is the fastest way to
-see what "agentic" actually buys.
+This mode still exists and is still selectable, but it is no longer the default.
+Keeping it lets you run both engines on the same PR and compare them, which is
+the fastest way to see what "agentic" actually buys.
 
-### `single` / `multi` — the agentic design (v2)
+### `agent` — the agentic design (v2, the default)
 
 The model is given **tools** and decides for itself what to investigate:
 
@@ -41,7 +41,7 @@ changed files → run the standard analysers once (cheap, deterministic)
                   find a symbol's callers · run another analyser ·
                   read git history · report a finding
              → structured findings out
-             → comments + SARIF + JSON + optional build gate
+             → comments + applyable fixes + SARIF + JSON + optional gate
 ```
 
 The loop is ordinary: ask the model what to do, do it, give it the result, ask
@@ -104,9 +104,8 @@ src/
 │   ├── findings.py     The AgentFinding record + merging
 │   ├── context.py      What the agent is allowed to see
 │   ├── prompts.py      What the agent is told to look for
-│   ├── single.py       One agent
-│   ├── multi.py        Several specialists in parallel
-│   └── specialists.py  Their mandates
+│   ├── fixes.py        Applyable fixes and their validation
+│   └── single.py       The agent entry point
 ├── tools/analyzers/    13 static analysers (semgrep, bandit, ruff, eslint, ...)
 └── output/             comments · sarif · json_report · gating · summary
 ```
@@ -138,19 +137,20 @@ somewhere misleading.
 
 ### `agent/toolbelt.py` — the tools
 
-All eleven are **read-only**. The agent inspects; it never writes to your repo.
+All twelve are **read-only**. The agent inspects; it never writes to your repo.
 
 | Tool | Why the agent needs it |
 |---|---|
 | `list_changed_files` | The shape of the change |
 | `read_diff` | **What actually changed** — v1 never had this |
 | `read_file` | Context around the diff, or a file the PR didn't touch |
+| `read_lines` | Raw text with no line-number gutter, for composing a fix |
 | `search_repo` | Find callers, find other uses of a risky pattern |
 | `find_symbol` | Did a changed signature break anyone? |
 | `list_analyzers` / `run_analyzer` | Run a scanner on a specific suspicion |
 | `git_log` | Does this area churn? Was it just fixed? |
 | `read_pr_metadata` | Does the diff do what the PR claims? |
-| `post_finding` | Report one issue |
+| `post_finding` | Report one issue, optionally with an applyable fix |
 | `finish` | Done |
 
 Search uses `git grep`, which only sees tracked files — the correct scope for a
@@ -172,40 +172,65 @@ When the budget runs out, the agent gets **one final turn with no tools** to
 write a summary of what it already found. A partial review still gets posted —
 losing an hour of analysis because of a step limit would be the worst outcome.
 
-### `agent/multi.py` — when one agent isn't enough
+### `agent/fixes.py` — fixes you can apply with one click
 
-v1's real weakness was never the lack of tools. It was that a single prompt
-carrying ten review categories produces a shallow paragraph on each.
+A finding can carry an exact replacement for a line range. It renders as a
+GitHub **suggested change**:
 
-`multi` mode gives each concern its own agent, its own context window, and one
-narrow mandate:
+````
+```suggestion
+    cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+```
+````
 
-`security` · `correctness` · `testing` · `design` · `dependencies` ·
-`performance` · `infrastructure` · `frontend`
+The author gets an **Apply suggestion** button. Applying one makes a commit;
+batching several makes one commit for all of them. That is accept/reject per
+edit, and it is native to the PR interface — **the tool never pushes code.**
 
-They run in parallel, each with a slice of the token budget, then a single
-aggregation pass reconciles them into one verdict. Two specialists finding the
-same issue is normal — a missing input check is both a security and a
-correctness problem — so identical findings are merged, keeping the more severe
-reading.
+That last part is a security property, not a convenience. The agent reads
+untrusted repository contents, which can contain text addressed at the reviewer.
+If the agent could commit, a prompt injection could land code in your branch. A
+suggestion needs a human click, so the human-in-the-loop is structural rather
+than a rule we hope holds. It also works on fork PRs, where the workflow has no
+write access at all.
 
-Which specialists run is decided **from the changed files, not by a model**. If
-no lockfile changed, the dependency reviewer has nothing to do; spending a model
-call to discover that would be paying tokens for a decision a file extension
-already answers.
+**The hard part is exactness.** A suggestion replaces the commented range
+*verbatim*, so every fix is validated before it is posted:
 
-`multi` costs roughly 4–8× `single`. That is the trade, and it is why `single`
-is the recommended default.
+| Check | Why |
+|---|---|
+| Every line in range is in the diff | GitHub rejects the comment otherwise |
+| Range is contiguous, ≤ 40 lines | A suggestion spanning a hunk gap is invalid |
+| Replacement differs from the original | A no-op suggestion is noise |
+| Indentation preserved | A flush-left replacement silently breaks the file |
+| Confidence is `high` | A wrong fix is one click from being committed |
+
+This validation is not optional. `safe_create_review` falls back to a plain
+summary review when GitHub returns a 422 — so **one** out-of-range suggestion
+would strip the inline comments from every other finding in the review.
+
+When a fix fails validation the finding is still reported, the code still shows
+as a plain block, and the agent is told exactly why — with the true text of the
+range echoed back, so it can correct rather than guess.
 
 ---
 
 ## 4. What the reviewer looks for
 
-Ten domains. In `single` mode they are one checklist; in `multi` mode each
-belongs to a specialist.
+The reviewer works to a **bar**, not a checklist of conventions:
 
-`correctness` · `security` · `design` · `testing` · `performance` ·
-`api-contract` · `operations` · `documentation` · `hygiene` · `accessibility`
+> Report a finding only when you can state a concrete failure — the input or
+> condition that triggers it, what goes wrong, and the consequence. If you
+> cannot name the trigger, you are guessing.
+
+And an explicit **do-not-report** list: line length, brackets, indentation,
+import order, quote style, naming conventions, "add a comment here". Formatters
+and linters run first and own all of that. A name is only a finding when it
+actively misleads.
+
+Priority order: `correctness` · `security` · `operations` · `performance` ·
+`api-contract` · `testing` · `design` · `documentation`, plus `hygiene` and
+`accessibility` where they apply.
 
 The security checklist is deliberately the longest, and every security finding
 must carry a **CWE** identifier:
@@ -299,9 +324,6 @@ discovers it automatically. Add it to `DEFAULT_TOOLS` in `registry.py` to have
 **Adding an agent tool** — add a `ToolSchema` to `Toolbelt.schemas()` and a
 matching `_tool_<name>` method. Dispatch finds it by name. A test asserts every
 schema has a handler.
-
-**Adding a specialist** — append a `Specialist` to `SPECIALISTS` in
-`specialists.py` with a mandate and an applicability predicate.
 
 **Testing without spending anything** — `tests/fakes.py` has a `FakeProvider`
 that replays a scripted sequence of turns. The entire agent loop is tested
