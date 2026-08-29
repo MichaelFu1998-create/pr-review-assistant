@@ -30,7 +30,7 @@ inputs:
     required: false
     default: "25"
   max_agent_tokens:
-    description: "Token budget for one review run. Shared across specialists in multi mode."
+    description: "Token budget for one review run."
     required: false
     default: "150000"
   max_agent_seconds:

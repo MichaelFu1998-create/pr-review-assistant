@@ -44,11 +44,12 @@ jobs:
           docker run --rm --entrypoint python pr-review-assistant:ci -c "
           import sys; sys.path.insert(0, '/app')
           from src.main import main
-          from src.agent import run_single_agent, run_multi_agent
+          from src.agent import run_single_agent
+          from src.agent.fixes import validate_fix
           from src.output import build_sarif, build_report
           from src.llm.xai_provider import XAIProvider
           from src.llm.anthropic_provider import AnthropicProvider
-          print('entrypoint and all providers import')
+          print('entrypoint, agent, fixes and all providers import')
           "
       - name: Verify the bundled analysers
         run: |
