@@ -180,7 +180,7 @@ class TestFullRun:
         posted, _ = _run(harness)
         joined = " ".join(c["body"] for c in posted["comments"])
         assert "definitions/89.html" in joined
-        assert "Suggested fix" in joined
+        assert "Suggested fix" in joined or "How to fix" in joined
 
     def test_agent_saw_the_diff_not_the_whole_file(self, harness):
         """The v1 failure this fixes: the model reviewed whole files."""
@@ -300,7 +300,10 @@ class TestApplyableFixes:
         posted, _ = _run(harness, script=self._script())
         bodies = " ".join(c["body"] for c in posted["comments"])
         assert bodies.count("```suggestion") == 1
-        assert "not auto-applyable" in bodies
+        # the two refused fixes each say why they have no button
+        assert bodies.count("No Apply button:") == 2
+        assert "only high-confidence findings" in bodies
+        assert "not all part of this PR's diff" in bodies
 
     def test_suggestion_payload_targets_the_fix_range(self, harness):
         posted, _ = _run(harness, script=self._script())

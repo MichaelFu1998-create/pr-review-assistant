@@ -178,12 +178,15 @@ class TestRendering:
         assert "```suggestion" in body
         assert "apply directly" in body
 
-    def test_rejected_fix_renders_a_plain_fence(self):
+    def test_rejected_fix_shows_the_code_and_says_why(self):
         fix = validate_fix(Fix(900, 900, "whatever"), "app.py", diff(), "high")
         body = format_finding_body(self._finding(fix=fix))
         assert "```suggestion" not in body
-        assert "not auto-applyable" in body
-        assert "whatever" in body
+        assert "apply by hand" in body
+        assert "whatever" in body  # the proposed code is still shown
+        # the validation reason is surfaced, not left to be guessed at
+        assert "No Apply button:" in body
+        assert "not all part of this PR's diff" in body
 
     def test_single_line_fix_comment_payload(self):
         fix = validate_fix(Fix(2, 2, "import sqlite3  # ok"), "app.py", diff(), "high")
@@ -408,3 +411,76 @@ class TestReadLinesOutsideTheDiff:
 
     def test_start_past_end_of_file(self, belt):
         assert "lines" in self._read(belt, path="helper.py", start_line=999, end_line=1000)
+
+
+class TestFixAffordance:
+    """A reader must be able to tell the three outcomes apart at a glance.
+
+    Regression for testbed#2, where prose advice rendered inside a code fence
+    looked like an applyable fix whose button had gone missing.
+    """
+
+    def _finding(self, **kw):
+        base = dict(path="app.py", line=2, severity="high", category="security",
+                    title="t", body="b", confidence="high")
+        base.update(kw)
+        return AgentFinding(**base)
+
+    def test_the_three_outcomes_are_distinguishable(self):
+        applyable = format_finding_body(
+            self._finding(fix=validate_fix(Fix(2, 2, "import sqlite3  # ok"),
+                                           "app.py", diff(), "high"))
+        )
+        refused = format_finding_body(
+            self._finding(fix=validate_fix(Fix(900, 900, "x"), "app.py", diff(), "high"))
+        )
+        prose = format_finding_body(self._finding(suggested_fix="Use a real JWT library."))
+
+        assert "```suggestion" in applyable
+        assert "```suggestion" not in refused and "```" in refused
+        assert "```" not in prose
+
+        # each states its own situation
+        assert "apply directly" in applyable
+        assert "apply by hand" in refused
+        assert "manual change" in prose
+
+    def test_only_the_applyable_one_omits_the_no_button_note(self):
+        applyable = format_finding_body(
+            self._finding(fix=validate_fix(Fix(2, 2, "import sqlite3  # ok"),
+                                           "app.py", diff(), "high"))
+        )
+        assert "No Apply button" not in applyable
+
+    def test_refused_fix_names_the_specific_reason(self):
+        for bad, expected in [
+            (Fix(900, 900, "x"), "not all part of this PR's diff"),
+            (Fix(2, 2, "import sqlite3"), "identical to the current code"),
+        ]:
+            body = format_finding_body(
+                self._finding(fix=validate_fix(bad, "app.py", diff(), "high"))
+            )
+            assert expected in body, expected
+
+    def test_low_confidence_fix_explains_itself(self):
+        body = format_finding_body(
+            self._finding(
+                confidence="medium",
+                fix=validate_fix(Fix(2, 2, "import sqlite3  # ok"), "app.py",
+                                 diff(), "medium"),
+            )
+        )
+        assert "No Apply button:" in body
+        assert "only high-confidence findings" in body
+
+    def test_no_fix_at_all_adds_nothing(self):
+        body = format_finding_body(self._finding())
+        assert "Apply button" not in body
+        assert "Suggested fix" not in body and "How to fix" not in body
+
+    def test_prose_survives_multiple_paragraphs(self):
+        body = format_finding_body(
+            self._finding(suggested_fix="First line.\n\nSecond line.")
+        )
+        assert "First line." in body and "Second line." in body
+        assert "```" not in body

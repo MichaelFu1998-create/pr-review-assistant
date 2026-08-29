@@ -229,6 +229,16 @@ When a fix fails validation the finding is still reported, the code still shows
 as a plain block, and the agent is told exactly why — with the true text of the
 range echoed back, so it can correct rather than guess.
 
+A comment therefore ends in one of three ways, and says which:
+
+- **apply directly** — a suggestion block with a button
+- **apply by hand** — proposed code that failed validation, with the reason
+- **manual change** — prose, because the fix needs a new dependency or a
+  restructure that no replacement of those lines can express
+
+Prose is rendered as prose, never in a code fence: a fence makes an English
+sentence look like applyable code whose button has gone missing.
+
 ---
 
 ## 4. What the reviewer looks for

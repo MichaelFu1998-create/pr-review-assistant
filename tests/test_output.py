@@ -108,11 +108,16 @@ class TestFindingBody:
     def test_high_confidence_is_not_labelled(self):
         assert "confidence" not in format_finding_body(_finding(confidence="high"))
 
-    def test_suggested_fix_is_a_plain_fence(self):
-        """Not a ```suggestion block: an inexact one renders a broken Apply button."""
-        body = format_finding_body(_finding(suggested_fix="json.loads(raw)"))
-        assert "Suggested fix" in body
-        assert "```suggestion" not in body
+    def test_prose_advice_is_not_rendered_as_code(self):
+        """A fence would make English advice look like an applyable fix that
+        had somehow lost its button — the exact confusion this avoids."""
+        body = format_finding_body(
+            _finding(suggested_fix="Use PyJWT with an explicit algorithm allow-list.")
+        )
+        assert "**How to fix** — manual change:" in body
+        assert "```" not in body
+        assert "No Apply button" in body
+        assert "beyond the lines commented on" in body
 
     def test_evidence_and_source_in_footer(self):
         body = format_finding_body(_finding(source="bandit", evidence=["bandit:B301"]))

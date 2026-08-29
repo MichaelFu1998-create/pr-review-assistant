@@ -97,9 +97,21 @@ same.
 
 Apply the ones you want *before* you merge.
 
-Fixes only appear where the reviewer is confident *and* the lines are part of your
-diff — that is a GitHub constraint, not a choice. Everything else arrives as a
-plain code block you can copy.
+### Why some findings have no Apply button
+
+Every comment tells you which of these it is:
+
+| Heading | Meaning |
+|---|---|
+| **Suggested fix — apply directly** | A one-click fix. Applying it commits the change |
+| **Suggested fix — apply by hand** | The reviewer proposed code, but it could not be turned into a suggestion. The reason is stated inline |
+| **How to fix — manual change** | The correction needs a new import, dependency, or a restructure beyond the commented lines, so no line replacement can express it |
+
+A missing button is not a rejected finding — it is still real feedback, it just
+needs a human edit.
+
+Note that **added lines can carry a suggestion**. What decides it is whether the
+lines appear in the diff at all, not whether they were added or changed.
 
 Turn suggestions off entirely with `suggest_fixes: "false"`.
 
