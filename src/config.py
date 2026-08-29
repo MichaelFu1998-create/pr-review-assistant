@@ -17,9 +17,9 @@ class Config:
 
     # LLM settings
     llm_provider: str = "xai"
-    openai_model: str = "grok-4.6"
-    openai_temperature: float = 1.0
-    openai_max_tokens: int = 32000
+    model: str = "grok-4.6"
+    temperature: float = 1.0
+    max_tokens: int = 32000
     api_base_url: str = ""
     anthropic_api_key: str = ""
     xai_api_key: str = ""
@@ -96,6 +96,29 @@ OVERRIDABLE_DEFAULTS: dict[str, object] = {
 }
 
 
+def _renamed(current: str, legacy: str) -> str:
+    """Read an input that used to have an `openai_`-prefixed name.
+
+    `openai_model` was a reasonable name when OpenAI was the only provider; it
+    is actively misleading now that it also names Grok and Claude models. The
+    old inputs keep working so v2.0 workflows do not break, but using one warns.
+    """
+    value = _env(current, "")
+    if value:
+        return value
+
+    legacy_value = _env(legacy, "")
+    if legacy_value:
+        logger.warning(
+            "Input '%s' is deprecated and will be removed in v3; rename it to "
+            "'%s'. The openai_ prefix was misleading — this setting applies to "
+            "whichever provider is selected.",
+            legacy.lower(),
+            current.lower(),
+        )
+    return legacy_value
+
+
 def _normalize_agent_mode(value: str) -> str:
     """Resolve the agent_mode input, tolerating the retired names.
 
@@ -125,9 +148,9 @@ def load_config() -> Config:
         github_token=_env("GITHUB_TOKEN"),
         github_pr_id=int(_env("GITHUB_PR_ID", "0") or "0"),
         llm_provider=_env("LLM_PROVIDER", "") or "xai",
-        openai_model=_env("OPENAI_MODEL", "") or "grok-4.6",
-        openai_temperature=float(_env("OPENAI_TEMPERATURE", "") or "1"),
-        openai_max_tokens=int(_env("OPENAI_MAX_TOKENS", "") or "32000"),
+        model=_renamed("MODEL", "OPENAI_MODEL") or "grok-4.6",
+        temperature=float(_renamed("TEMPERATURE", "OPENAI_TEMPERATURE") or "1"),
+        max_tokens=int(_renamed("MAX_TOKENS", "OPENAI_MAX_TOKENS") or "32000"),
         api_base_url=_env("API_BASE_URL", ""),
         anthropic_api_key=_env("ANTHROPIC_API_KEY", ""),
         xai_api_key=_env("XAI_API_KEY", ""),

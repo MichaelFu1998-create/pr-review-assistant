@@ -174,7 +174,7 @@ lines appear in the diff at all, not whether they were added or modified.
 | Input | Default | What to change it for |
 |---|---|---|
 | `agent_mode` | `agent` | `pipeline` runs the original non-agentic engine — cheapest, no fixes |
-| `openai_model` | `grok-4.6` | Any model on your chosen provider |
+| `model` | `grok-4.6` | Any model on your chosen provider |
 | `reasoning_effort` | — | `low` \| `medium` \| `high` \| `xhigh`. The real depth-vs-cost dial on `grok-4.6` |
 | `review_persona` | `normal` | `mentor` explains the principle behind each defect; `security-auditor` prioritises the security checklist |
 | `review_focus` | `all` | `security`, `quality`, `performance`, `education` |
@@ -226,7 +226,7 @@ missed warning.
 ```yaml
   llm_provider: openai
   openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-  openai_model: gpt-5.4-mini-2026-03-17
+  model: gpt-5.4-mini-2026-03-17
 ```
 
 **Anthropic**
@@ -234,7 +234,7 @@ missed warning.
 ```yaml
   llm_provider: anthropic
   anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-  openai_model: claude-sonnet-4-6
+  model: claude-sonnet-4-6
 ```
 
 **Anything OpenAI-compatible (Ollama, vLLM, Azure)**
@@ -243,11 +243,15 @@ missed warning.
   llm_provider: openai
   openai_api_key: "not-needed"
   api_base_url: "http://localhost:11434/v1"
-  openai_model: llama3
+  model: llama3
 ```
 
-`openai_model` is the model name for *every* provider — the input keeps its
-original name for backward compatibility.
+`model` names the model for *every* provider. The `*_api_key` inputs stay
+provider-specific, because those genuinely are per-provider.
+
+> Renamed in v2.1: `openai_model` → `model`, `openai_temperature` →
+> `temperature`, `openai_max_tokens` → `max_tokens`. The old names still work
+> and log a deprecation warning.
 
 ### Findings in the Security tab
 
@@ -339,10 +343,10 @@ Settings that belong to the project, so every workflow need not repeat them:
 | `openai_api_key` | — | OpenAI key |
 | `anthropic_api_key` | — | Anthropic key |
 | `llm_provider` | `xai` | `xai`, `openai`, `anthropic` |
-| `openai_model` | `grok-4.6` | Model name, for whichever provider is selected |
+| `model` | `grok-4.6` | Model name, for whichever provider is selected |
 | `reasoning_effort` | — | `low`/`medium`/`high`/`xhigh` on reasoning models |
-| `openai_temperature` | `1` | Dropped automatically if the model rejects it |
-| `openai_max_tokens` | `32000` | Max tokens per LLM response |
+| `temperature` | `1` | Dropped automatically if the model rejects it |
+| `max_tokens` | `32000` | Max tokens per LLM response |
 | `api_base_url` | — | Custom base URL for an OpenAI-compatible API |
 | `agent_mode` | `agent` | `agent` or `pipeline` |
 | `max_agent_steps` | `25` | Tool-calling turns before the agent must stop |
@@ -362,6 +366,9 @@ Settings that belong to the project, so every workflow need not repeat them:
 | `output_json` | — | Path to write the JSON report to |
 | `fail_on` | — | Severity threshold that fails the check |
 | `logging` | `warning` | `debug`/`info`/`warning`/`error` |
+| `openai_model` | — | **Deprecated** — use `model` |
+| `openai_temperature` | — | **Deprecated** — use `temperature` |
+| `openai_max_tokens` | — | **Deprecated** — use `max_tokens` |
 
 </details>
 

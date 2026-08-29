@@ -51,8 +51,8 @@ def build_user_message(
 ) -> str:
     """Build the user message with token-aware truncation."""
     language = detect_language(filename) or "code"
-    max_context = llm.max_context_tokens(config.openai_model)
-    output_budget = config.openai_max_tokens
+    max_context = llm.max_context_tokens(config.model)
+    output_budget = config.max_tokens
     available_tokens = max_context - output_budget - SYSTEM_MSG_BUDGET
 
     parts = []
