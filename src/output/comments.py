@@ -72,6 +72,26 @@ def format_finding_body(finding: AgentFinding) -> str:
     return "\n".join(parts)
 
 
+def is_agent_finding(finding: AgentFinding) -> bool:
+    """True for findings the agent reasoned about, false for raw analyser hits."""
+    return finding.source == "agent"
+
+
+def split_by_source(
+    findings: list[AgentFinding],
+) -> tuple[list[AgentFinding], list[AgentFinding]]:
+    """Partition into (agent findings, analyser findings).
+
+    Only the agent's findings become inline comments. The agent is prompted to
+    validate analyser output and re-report the real hits in its own words with
+    an explanation, so posting both would comment twice on the same line — once
+    with reasoning, once with a rule id.
+    """
+    agent = [f for f in findings if is_agent_finding(f)]
+    analyser = [f for f in findings if not is_agent_finding(f)]
+    return agent, analyser
+
+
 def build_inline_comments(
     findings: list[AgentFinding],
     diff: DiffMap,

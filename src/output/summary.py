@@ -25,6 +25,75 @@ def format_severity_table(findings: list[AgentFinding]) -> str:
     return "\n".join(rows)
 
 
+def format_how_to_act(applyable: int, pr_url: str = "") -> list[str]:
+    """Explain what the buttons GitHub renders actually do.
+
+    We emit a ```suggestion block; GitHub decides which controls to draw, and it
+    offers no reject button. Two things are consistently misread as a result:
+    "Resolve conversation" looks like a decision about the code when it only
+    marks a thread handled, and merging looks like it accepts what is pending
+    when it silently discards every unapplied suggestion.
+
+    Batching is also tab-specific — the button exists in the Conversation tab but
+    refuses to work there — so the link points at Files changed.
+    """
+    plural = "fix" if applyable == 1 else "fixes"
+    files_tab = f"{pr_url}/files" if pr_url else "Files changed"
+    batch_cell = (
+        f"Collects several into one commit — only works in the [Files changed]({files_tab}) tab"
+        if pr_url
+        else "Collects several into one commit — only works in the **Files changed** tab"
+    )
+
+    return [
+        f"**{applyable} suggested {plural}** below can be applied directly.",
+        "",
+        "### How to act on this review",
+        "",
+        "| Action | What it does |",
+        "|---|---|",
+        "| **Apply suggestion** | Accepts the fix and commits it to this branch |",
+        f"| **Add suggestion to batch** | {batch_cell} |",
+        "| **Resolve conversation** | Marks the thread handled. Applies nothing — this is how you decline |",
+        "| Do nothing | The suggestion is ignored |",
+        "",
+        "> **Merging this PR applies nothing.** Unapplied suggestions are discarded "
+        "on merge — the branch merges exactly as it stands. Apply the ones you want first.",
+        "",
+    ]
+
+
+def format_analyser_table(findings: list[AgentFinding], limit: int = 40) -> list[str]:
+    """Render analyser hits compactly, rather than as full finding bodies."""
+    if not findings:
+        return []
+
+    rows = [
+        "### Static analysis",
+        "",
+        "_Raw analyser output, for reference. Anything important here is already "
+        "explained in the comments above._",
+        "",
+        "| Severity | Location | Tool | Detail |",
+        "|---|---|---|---|",
+    ]
+    for finding in findings[:limit]:
+        location = f"`{finding.path}`"
+        if finding.line:
+            location += f":{finding.line}"
+        # title carries "<rule_id>: <message>" for analyser findings
+        # (AgentFinding.from_tool_finding); body is only the message.
+        detail = (finding.title or finding.body).replace("|", "\\|").replace("\n", " ")[:120]
+        rows.append(
+            f"| {SEVERITY_LABEL.get(finding.severity, finding.severity)} | "
+            f"{location} | `{finding.source}` | {detail} |"
+        )
+    if len(findings) > limit:
+        rows.append(f"\n_{len(findings) - limit} further hits omitted._")
+    rows.append("")
+    return rows
+
+
 def count_fixes(findings: list[AgentFinding]) -> tuple[int, int]:
     """(applyable, rejected) fix counts.
 
@@ -53,9 +122,11 @@ def build_review_body(
     unanchored: list[AgentFinding] | None = None,
     tools_used: list[str] | None = None,
     budget: dict | None = None,
-    agent_mode: str = "single",
+    agent_mode: str = "agent",
     model: str = "",
     observations: dict[str, list[str]] | None = None,
+    analyser_findings: list[AgentFinding] | None = None,
+    pr_url: str = "",
 ) -> str:
     """Assemble the review body posted above the inline comments."""
     parts = ["## Automated Code Review", ""]
@@ -63,23 +134,29 @@ def build_review_body(
     if summary:
         parts.extend([summary, ""])
 
+    analyser_findings = analyser_findings or []
+
     parts.extend(["### Findings", "", format_severity_table(findings), ""])
 
     categories = format_category_line(findings)
     if categories:
         parts.extend([f"_{categories}_", ""])
 
-    applyable, _rejected = count_fixes(findings)
-    if applyable:
-        plural = "fix" if applyable == 1 else "fixes"
+    # Counted separately: mixing raw analyser hits into the table above made it
+    # claim 27 findings on a review that posted 8 comments.
+    if analyser_findings:
+        n = len(analyser_findings)
         parts.extend(
             [
-                f"**{applyable} suggested {plural}** can be applied directly from "
-                "the inline comments — use **Apply suggestion** to commit one, or "
-                "**Add suggestion to batch** to commit several together.",
+                f"Plus {n} static-analysis hit{'s' if n != 1 else ''}, listed below. "
+                "The reviewer checked these and re-reported the ones that matter above.",
                 "",
             ]
         )
+
+    applyable, _rejected = count_fixes(findings)
+    if applyable:
+        parts.extend(format_how_to_act(applyable, pr_url))
 
     if scores:
         table = format_score_summary(scores)
@@ -102,6 +179,8 @@ def build_review_body(
             if finding.line:
                 location += f" line {finding.line}"
             parts.extend([f"**{location}**", "", format_finding_body(finding), "", "---", ""])
+
+    parts.extend(format_analyser_table(analyser_findings))
 
     if observations:
         for heading, lines in observations.items():

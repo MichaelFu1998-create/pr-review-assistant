@@ -1,6 +1,7 @@
 """Parallel tool execution engine."""
 
 import logging
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -51,6 +52,10 @@ def run_tools(
                     for error in result.errors:
                         logger.warning(f"{tool.name} error: {error}")
 
+                # Normalise paths before anything else consumes them.
+                for finding in result.findings:
+                    finding.file = relativize(finding.file, workspace)
+
                 # Filter by severity threshold
                 filtered = [
                     f for f in result.findings
@@ -66,6 +71,43 @@ def run_tools(
                 logger.warning(f"Tool {tool.name} failed: {e}")
 
     return _deduplicate(all_findings)
+
+
+def relativize(path: str, workspace: str) -> str:
+    """Rewrite a tool's path into the repo-relative form the diff uses.
+
+    Analysers report whatever the underlying binary prints, and several emit
+    absolute paths even when run with cwd=workspace — bandit and semgrep both
+    return "/github/workspace/app/api.py" where the PR diff says "app/api.py".
+    Left unreconciled, those findings never anchor to a diff line and never
+    deduplicate against the agent's, so they pile up in the summary and inflate
+    every count.
+
+    A path outside the workspace is returned unchanged: it cannot be anchored
+    either way, and rewriting it would misattribute the finding to a file that
+    was never scanned.
+    """
+    if not path:
+        return path
+
+    cleaned = path
+    while cleaned.startswith("./"):
+        cleaned = cleaned[2:]
+
+    if not os.path.isabs(cleaned):
+        return cleaned
+
+    try:
+        root = os.path.realpath(workspace)
+        resolved = os.path.realpath(cleaned)
+    except OSError:
+        return cleaned
+
+    if resolved == root or resolved.startswith(root + os.sep):
+        return os.path.relpath(resolved, root)
+
+    logger.debug("Finding path %s is outside the workspace; leaving as-is", path)
+    return cleaned
 
 
 def _run_single_tool(

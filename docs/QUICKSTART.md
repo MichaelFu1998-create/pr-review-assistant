@@ -75,20 +75,33 @@ The review appears as comments within a minute or two. That's it.
 ## Applying suggested fixes
 
 For issues it is confident about, the reviewer attaches a **suggested change**.
-In the PR you will see the fix in a green block with a button:
+GitHub renders the buttons on these, not us — so it is worth knowing exactly what
+each one does.
 
-- **Apply suggestion** — commits that one fix on its own.
-- **Add suggestion to batch** — collect several, then **Commit suggestions**
-  applies them all in a single commit.
+| Action | What it does |
+|---|---|
+| **Apply suggestion** | Accepts the fix and commits it to your branch |
+| **Add suggestion to batch** | Collects several into one commit. **Only works in the Files changed tab** — the button appears in the Conversation tab but refuses to run there |
+| **Resolve conversation** | Marks the thread handled. It applies nothing and discards nothing — it is just thread state. This is how you decline a fix |
+| Do nothing | The suggestion is ignored |
 
-So you accept the fixes you want and simply ignore the rest. Nothing is
-committed unless you click; the reviewer never pushes to your branch.
+There is no red "reject" button, because GitHub does not provide one. Declining a
+fix means either resolving the thread or simply leaving it — the outcome is the
+same.
 
-Fixes only appear where the reviewer is confident *and* the lines are part of
-your diff — that is a GitHub constraint, not a choice. Everything else arrives
-as a plain code block you can copy.
+### Merging does not apply anything
 
-Turn it off with `suggest_fixes: "false"`.
+> If you merge the PR without clicking **Apply**, every suggestion is discarded.
+> The branch merges exactly as it stands. Suggestions are review comments; they
+> never modify your code on their own.
+
+Apply the ones you want *before* you merge.
+
+Fixes only appear where the reviewer is confident *and* the lines are part of your
+diff — that is a GitHub constraint, not a choice. Everything else arrives as a
+plain code block you can copy.
+
+Turn suggestions off entirely with `suggest_fixes: "false"`.
 
 ## Choosing a mode
 
@@ -291,6 +304,8 @@ of the vulnerability classes this reviewer is built to catch.
 | Footer says **stopped early** | Budget hit; raise `max_agent_steps` or narrow `files` |
 | Analysers skipped | Add `fetch-depth: 0` to checkout |
 | No Apply buttons | The fix lines were outside your diff, or the reviewer was not confident enough. Both are intentional |
+| "Add suggestion to batch" does nothing | You are in the Conversation tab. Batching only works in **Files changed** |
+| Merged, but the fixes are missing | Suggestions apply only when clicked. Merging discards unapplied ones |
 | Review is shallow | Raise `max_agent_steps`, set `reasoning_effort: high`, or use `review_focus` |
 
 ---
