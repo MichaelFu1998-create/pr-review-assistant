@@ -61,12 +61,16 @@ def build_sarif(
     for finding in findings:
         rid = rule_id(finding)
         if rid not in rules:
+            tags = ["pr-review", finding.category]
+            if finding.cwe:
+                tags.extend(["security", f"external/cwe/{finding.cwe.lower()}"])
             properties = {
-                "tags": ["pr-review", finding.category],
+                # SARIF requires uniqueItems on tags, and GitHub rejects the whole
+                # upload if any rule violates it. A security-category finding with
+                # a CWE would otherwise carry "security" twice.
+                "tags": list(dict.fromkeys(tags)),
                 "security-severity": SEVERITY_TO_SCORE.get(finding.severity, "5.0"),
             }
-            if finding.cwe:
-                properties["tags"].extend(["security", f"external/cwe/{finding.cwe.lower()}"])
             rules[rid] = {
                 "id": rid,
                 "name": finding.category.replace("-", "").title(),

@@ -95,14 +95,20 @@ def _format_fix(finding: AgentFinding) -> list[str]:
         # because an out-of-range suggestion 422s the whole review.
         return ["", "**Suggested fix** — apply directly:", "```suggestion", fix.replacement, "```"]
 
+    # The two non-applyable states get a red CAUTION callout. GitHub renders its
+    # own prominent green box and Apply button for a suggestion, so an applyable
+    # fix needs no extra colour; these two are the ones that otherwise read as a
+    # fix whose button has gone missing.
     if fix is not None and fix.replacement:
         # Validation refused it. Still show the code — it is useful — but say why
         # there is no button rather than leaving it to be guessed at.
         reason = fix.rejected_because or "it could not be validated against this diff"
         return [
             "",
-            "**Suggested fix** — apply by hand:",
-            f"_No Apply button: {reason}._",
+            "> [!CAUTION]",
+            f"> **No Apply button** — {reason}. Apply this by hand, or",
+            "> **Resolve conversation** to decline.",
+            "",
             "```",
             fix.replacement,
             "```",
@@ -114,8 +120,9 @@ def _format_fix(finding: AgentFinding) -> list[str]:
         # is something you could apply.
         return [
             "",
-            "**How to fix** — manual change:",
-            "_No Apply button: this needs changes beyond the lines commented on._",
+            "> [!CAUTION]",
+            "> **No Apply button** — this needs changes beyond the lines commented",
+            "> on. Make them by hand, or **Resolve conversation** to decline.",
             "",
             finding.suggested_fix.strip(),
         ]
