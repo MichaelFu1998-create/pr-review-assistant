@@ -173,7 +173,7 @@ def _normalize_title(title: str) -> str:
 
 
 class FindingCollector:
-    """Sink for `post_finding`. Shared across specialists in multi mode."""
+    """Sink for `post_finding`."""
 
     def __init__(self, max_findings: int = 100):
         self._findings: list[AgentFinding] = []

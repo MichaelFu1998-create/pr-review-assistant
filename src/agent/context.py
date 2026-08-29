@@ -39,8 +39,8 @@ class ReviewContext:
     tool_findings: list[Finding] = field(default_factory=list)
     tools_used: list[str] = field(default_factory=list)
     readme: str = ""
-    # In multi mode several specialists share one context and may each call
-    # run_analyzer; the appends below must not interleave.
+    # run_analyzer can be reached while tools/runner.py is still executing
+    # analysers on its own thread pool, so these appends must not interleave.
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def record_analyzer_run(self, tool_name: str, findings: list[Finding]) -> None:

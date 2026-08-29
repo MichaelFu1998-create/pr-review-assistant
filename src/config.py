@@ -16,8 +16,8 @@ class Config:
     github_pr_id: int = 0
 
     # LLM settings
-    llm_provider: str = "openai"
-    openai_model: str = "gpt-5.4-mini-2026-03-17"
+    llm_provider: str = "xai"
+    openai_model: str = "grok-4.6"
     openai_temperature: float = 1.0
     openai_max_tokens: int = 32000
     api_base_url: str = ""
@@ -33,12 +33,13 @@ class Config:
     severity_threshold: str = "low"
 
     # Agent settings (v2)
-    agent_mode: str = "pipeline"        # pipeline (v1) | single | multi
+    agent_mode: str = "agent"           # agent (v2, default) | pipeline (v1)
     max_agent_steps: int = 25
     max_agent_tokens: int = 150_000
     max_agent_seconds: float = 600.0
     max_findings: int = 100
-    specialists: str = ""               # multi mode; empty means all
+    reasoning_effort: str = ""           # xAI/OpenAI reasoning models: low|medium|high|xhigh
+    suggest_fixes: bool = True           # render applyable GitHub suggestions
 
     # Review settings
     review_focus: str = "all"
@@ -68,10 +69,6 @@ class Config:
         return [t.strip() for t in self.tools.split(",")]
 
     @property
-    def specialists_list(self) -> list[str]:
-        return [s.strip() for s in self.specialists.split(",") if s.strip()]
-
-    @property
     def focus_areas(self) -> list[str]:
         if self.review_focus == "all":
             return ["security", "quality", "performance", "education"]
@@ -99,26 +96,49 @@ OVERRIDABLE_DEFAULTS: dict[str, object] = {
 }
 
 
+def _normalize_agent_mode(value: str) -> str:
+    """Resolve the agent_mode input, tolerating the retired names.
+
+    'single' was only ever a contrast with 'multi'; with multi gone the mode is
+    just 'agent'. Both retired names still resolve so workflows written against
+    v2.0 keep running, but 'multi' warns, since it silently gets less than it
+    asked for.
+    """
+    mode = (value or "").strip().lower()
+    if mode in ("", "agent", "single"):
+        return "agent"
+    if mode == "pipeline":
+        return "pipeline"
+    if mode == "multi":
+        logger.warning(
+            "agent_mode 'multi' has been removed; running in 'agent' mode instead."
+        )
+        return "agent"
+    logger.warning("Unknown agent_mode '%s'; using 'agent'.", value)
+    return "agent"
+
+
 def load_config() -> Config:
     """Load configuration from environment variables, overlaid with .pr-review.json if present."""
     config = Config(
         openai_api_key=_env("OPENAI_API_KEY"),
         github_token=_env("GITHUB_TOKEN"),
         github_pr_id=int(_env("GITHUB_PR_ID", "0") or "0"),
-        llm_provider=_env("LLM_PROVIDER", "") or "openai",
-        openai_model=_env("OPENAI_MODEL", "") or "gpt-5.4-mini-2026-03-17",
+        llm_provider=_env("LLM_PROVIDER", "") or "xai",
+        openai_model=_env("OPENAI_MODEL", "") or "grok-4.6",
         openai_temperature=float(_env("OPENAI_TEMPERATURE", "") or "1"),
         openai_max_tokens=int(_env("OPENAI_MAX_TOKENS", "") or "32000"),
         api_base_url=_env("API_BASE_URL", ""),
         anthropic_api_key=_env("ANTHROPIC_API_KEY", ""),
         xai_api_key=_env("XAI_API_KEY", ""),
         files=_env("FILES", "") or "*",
-        agent_mode=_env("AGENT_MODE", "") or "pipeline",
+        agent_mode=_normalize_agent_mode(_env("AGENT_MODE", "")),
         max_agent_steps=int(_env("MAX_AGENT_STEPS", "") or "25"),
         max_agent_tokens=int(_env("MAX_AGENT_TOKENS", "") or "150000"),
         max_agent_seconds=float(_env("MAX_AGENT_SECONDS", "") or "600"),
         max_findings=int(_env("MAX_FINDINGS", "") or "100"),
-        specialists=_env("SPECIALISTS", ""),
+        reasoning_effort=_env("REASONING_EFFORT", ""),
+        suggest_fixes=(_env("SUGGEST_FIXES", "") or "true").lower() == "true",
         custom_instructions=_env("CUSTOM_INSTRUCTIONS", ""),
         output_sarif=_env("OUTPUT_SARIF", ""),
         output_json=_env("OUTPUT_JSON", ""),

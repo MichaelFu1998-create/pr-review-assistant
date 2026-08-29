@@ -52,9 +52,10 @@ class OpenAIProvider(LLMProvider):
             kwargs["base_url"] = resolved
         self.client = OpenAI(**kwargs)
         self._encoding = None
-        # Set once a request is rejected for sending temperature, so we stop
+        # Set once a request is rejected for sending one of these, so we stop
         # sending it for the rest of the run instead of paying the retry each call.
         self._omit_temperature = False
+        self._omit_reasoning_effort = False
 
     # --- v1 single-shot path (unchanged behaviour) ---
 
@@ -123,21 +124,33 @@ class OpenAIProvider(LLMProvider):
         }
         if not self._omit_temperature:
             params["temperature"] = config.temperature
+        # The depth/cost dial on reasoning models. Only sent when explicitly
+        # configured, since providers reject it on models that lack it.
+        if config.reasoning_effort and not self._omit_reasoning_effort:
+            params["reasoning_effort"] = config.reasoning_effort
 
         try:
             return self.client.chat.completions.create(**params)
         except Exception as e:
-            if self._omit_temperature or not _is_temperature_error(e):
-                raise
-            logger.warning(
-                "Model %s rejected temperature=%s; retrying without it and "
-                "omitting it for the rest of this run.",
-                config.model,
-                config.temperature,
-            )
-            self._omit_temperature = True
-            params.pop("temperature", None)
-            return self.client.chat.completions.create(**params)
+            if _is_temperature_error(e) and not self._omit_temperature:
+                logger.warning(
+                    "Model %s rejected temperature=%s; retrying without it and "
+                    "omitting it for the rest of this run.",
+                    config.model,
+                    config.temperature,
+                )
+                self._omit_temperature = True
+                params.pop("temperature", None)
+                return self.client.chat.completions.create(**params)
+            if _is_reasoning_effort_error(e) and "reasoning_effort" in params:
+                logger.warning(
+                    "Model %s does not accept reasoning_effort; retrying without it.",
+                    config.model,
+                )
+                self._omit_reasoning_effort = True
+                params.pop("reasoning_effort", None)
+                return self.client.chat.completions.create(**params)
+            raise
 
     @staticmethod
     def _to_wire(message: Message) -> dict:
@@ -192,3 +205,8 @@ class OpenAIProvider(LLMProvider):
 def _is_temperature_error(exc: Exception) -> bool:
     text = str(exc).lower()
     return "temperature" in text and ("unsupported" in text or "does not support" in text)
+
+
+def _is_reasoning_effort_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "reasoning_effort" in text or "reasoning effort" in text

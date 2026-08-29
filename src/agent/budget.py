@@ -75,17 +75,3 @@ class Budget:
             "elapsed_seconds": round(self.elapsed, 1),
             "stop_reason": self.stop_reason or "completed",
         }
-
-    def split(self, n: int) -> "Budget":
-        """A per-specialist budget, for multi mode.
-
-        Each specialist gets an equal share of tokens and time but its own step
-        count, since steps are what bound a single agent's depth.
-        """
-        n = max(n, 1)
-        return Budget(
-            max_steps=self.max_steps,
-            max_tokens=max(self.max_tokens // n, 10_000),
-            max_seconds=self.max_seconds,
-            max_repeated_calls=self.max_repeated_calls,
-        )

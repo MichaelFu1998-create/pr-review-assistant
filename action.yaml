@@ -20,11 +20,11 @@ inputs:
   # --- Agent settings (v2) ---
   agent_mode:
     description: >-
-      'pipeline' (v1: one single-shot LLM call per file), 'single' (v2: one
-      agent that investigates with tools), or 'multi' (v2: parallel
-      specialists). 'multi' costs several times 'single'.
+      'agent' (default: an agent that investigates with tools and can propose
+      applyable fixes) or 'pipeline' (the original v1 engine: one single-shot
+      LLM call per file, no tools).
     required: false
-    default: "pipeline"
+    default: "agent"
   max_agent_steps:
     description: "Maximum tool-calling turns per agent before it must stop."
     required: false
@@ -41,21 +41,28 @@ inputs:
     description: "Maximum findings recorded per agent."
     required: false
     default: "100"
-  specialists:
+  suggest_fixes:
     description: >-
-      Comma-separated specialists for multi mode (security, correctness,
-      testing, design, dependencies, performance, infrastructure, frontend).
-      Empty means choose automatically from the changed files.
+      Render high-confidence fixes as GitHub suggested changes, so the author
+      gets an Apply button per fix (true/false).
     required: false
-    default: ""
+    default: "true"
 
   # --- LLM Settings ---
   llm_provider:
-    description: "openai, anthropic, or xai"
+    description: "xai (default), openai, or anthropic"
     required: false
-    default: "openai"
+    default: "xai"
   openai_model:
-    description: "Model name (e.g. gpt-5.4-mini-2026-03-17, claude-sonnet-4-6, grok-4)"
+    description: >-
+      Model name for whichever provider is selected (e.g. grok-4.6,
+      gpt-5.4-mini-2026-03-17, claude-sonnet-4-6). Defaults to grok-4.6.
+    required: false
+    default: ""
+  reasoning_effort:
+    description: >-
+      Depth/cost dial for reasoning models such as grok-4.6:
+      low, medium, high, or xhigh. Empty leaves it to the provider.
     required: false
     default: ""
   openai_temperature:
@@ -155,9 +162,10 @@ runs:
     INPUT_MAX_AGENT_TOKENS: ${{ inputs.max_agent_tokens }}
     INPUT_MAX_AGENT_SECONDS: ${{ inputs.max_agent_seconds }}
     INPUT_MAX_FINDINGS: ${{ inputs.max_findings }}
-    INPUT_SPECIALISTS: ${{ inputs.specialists }}
+    INPUT_SUGGEST_FIXES: ${{ inputs.suggest_fixes }}
     INPUT_LLM_PROVIDER: ${{ inputs.llm_provider }}
     INPUT_OPENAI_MODEL: ${{ inputs.openai_model }}
+    INPUT_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
     INPUT_OPENAI_TEMPERATURE: ${{ inputs.openai_temperature }}
     INPUT_OPENAI_MAX_TOKENS: ${{ inputs.openai_max_tokens }}
     INPUT_API_BASE_URL: ${{ inputs.api_base_url }}

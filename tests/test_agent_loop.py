@@ -192,13 +192,6 @@ class TestBudget:
     def test_summary_reports_completed_when_untripped(self):
         assert Budget().summary()["stop_reason"] == "completed"
 
-    def test_split_divides_tokens_with_a_floor(self):
-        parent = Budget(max_tokens=100_000, max_steps=20)
-        child = parent.split(4)
-        assert child.max_tokens == 25_000
-        assert child.max_steps == 20  # steps bound depth, so are not divided
-        assert parent.split(1000).max_tokens == 10_000  # floor
-
     def test_remaining_steps(self):
         b = Budget(max_steps=5)
         b.record_step(Usage())

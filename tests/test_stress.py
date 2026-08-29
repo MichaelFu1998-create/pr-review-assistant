@@ -13,7 +13,6 @@ import pytest
 from src.agent.budget import Budget
 from src.agent.context import MAX_READ_BYTES, PRMetadata, ReviewContext
 from src.agent.findings import AgentFinding, FindingCollector, merge_findings
-from src.agent.specialists import select_specialists
 from src.agent.toolbelt import Toolbelt
 from src.diff.patch import DiffMap, parse_patch
 from src.llm.base import LLMConfig, ToolCall
@@ -264,7 +263,7 @@ class TestAwkwardEncodings:
         assert isinstance(build_review_body([finding], summary=""), str)
 
 
-class TestMergeAndSelectionEdges:
+class TestMergeEdges:
     def test_merge_with_thousands_of_tool_findings(self):
         from src.tools.base import Finding
 
@@ -276,27 +275,3 @@ class TestMergeAndSelectionEdges:
         merged = merge_findings([AgentFinding(path="a.py", line=5, title="x")], tools)
         assert len(merged) == 2_000  # the one at line 5 is superseded by the agent's
 
-    def test_specialist_selection_on_an_empty_diff(self):
-        context = ReviewContext(workspace=".", diff=DiffMap.from_pull_files({}))
-        names = {s.name for s in select_specialists(context)}
-        assert "security" in names          # always applicable
-        assert "frontend" not in names      # nothing to review
-        assert "dependencies" not in names
-
-    def test_specialist_selection_picks_up_lockfiles_and_workflows(self):
-        context = ReviewContext(
-            workspace=".",
-            diff=DiffMap.from_pull_files(
-                {
-                    "package-lock.json": {"patch": PATCH},
-                    ".github/workflows/ci.yaml": {"patch": PATCH},
-                    "src/App.tsx": {"patch": PATCH},
-                }
-            ),
-        )
-        names = {s.name for s in select_specialists(context)}
-        assert {"dependencies", "infrastructure", "frontend"} <= names
-
-    def test_unknown_requested_specialist_yields_nothing(self):
-        context = ReviewContext(workspace=".", diff=DiffMap.from_pull_files({}))
-        assert select_specialists(context, ["nonsense"]) == []

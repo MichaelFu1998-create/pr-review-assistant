@@ -29,7 +29,7 @@ class TestDefaults:
         assert config.review_persona == "normal"
         assert config.severity_threshold == "low"
         assert config.max_files == 10
-        assert config.agent_mode == "pipeline"
+        assert config.agent_mode == "agent"
 
     def test_empty_action_input_falls_back_to_the_default(self, workspace, monkeypatch):
         """The Action always sets every INPUT_ var, empty when unspecified."""
@@ -104,22 +104,30 @@ class TestDerivedProperties:
             "security", "quality", "performance", "education",
         }
 
-    def test_specialists_list(self, workspace, monkeypatch):
-        monkeypatch.setenv("INPUT_SPECIALISTS", "security, testing")
-        assert load_config().specialists_list == ["security", "testing"]
-        monkeypatch.setenv("INPUT_SPECIALISTS", "")
-        assert load_config().specialists_list == []
+    def test_agent_mode_aliases(self, workspace, monkeypatch):
+        """'single' was only a contrast with the removed 'multi' mode."""
+        for value, expected in [
+            ("", "agent"),
+            ("agent", "agent"),
+            ("single", "agent"),
+            ("multi", "agent"),
+            ("pipeline", "pipeline"),
+            ("PIPELINE", "pipeline"),
+            ("nonsense", "agent"),
+        ]:
+            monkeypatch.setenv("INPUT_AGENT_MODE", value)
+            assert load_config().agent_mode == expected, value
 
 
 class TestAgentSettings:
     def test_agent_inputs_are_read(self, workspace, monkeypatch):
-        monkeypatch.setenv("INPUT_AGENT_MODE", "multi")
+        monkeypatch.setenv("INPUT_AGENT_MODE", "agent")
         monkeypatch.setenv("INPUT_MAX_AGENT_STEPS", "8")
         monkeypatch.setenv("INPUT_MAX_AGENT_TOKENS", "50000")
         monkeypatch.setenv("INPUT_FAIL_ON", "high")
         monkeypatch.setenv("INPUT_OUTPUT_SARIF", "out.sarif")
         config = load_config()
-        assert config.agent_mode == "multi"
+        assert config.agent_mode == "agent"
         assert config.max_agent_steps == 8
         assert config.max_agent_tokens == 50_000
         assert config.fail_on == "high"

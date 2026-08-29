@@ -254,67 +254,6 @@ class TestGatingExit:
         _run(harness, Config(agent_mode="single"))
 
 
-class TestMultiMode:
-    def test_specialists_run_and_findings_merge(self, harness):
-        """Every specialist gets the same script; duplicates must collapse."""
-        repo, posted = harness
-        script = [
-            turn(call("read_diff", path="app.py")),
-            turn(
-                call(
-                    "post_finding",
-                    path="app.py", line=8, severity="critical", category="security",
-                    cwe="CWE-89", title="SQL injection in get_user", body="b",
-                )
-            ),
-            turn(call("finish", summary="done")),
-        ]
-        # FakeProvider is shared, so specialists consume the script in turn; the
-        # point here is that the run completes and dedups, not the exact split.
-        llm = FakeProvider(script * 10)
-        main_module.run_agent_review(
-            Config(agent_mode="multi", specialists="security,correctness"),
-            llm, LLMConfig(), MagicMock(), MagicMock(), FILES, "owner/repo",
-        )
-        titles = [c["body"] for c in posted["comments"]]
-        assert len(titles) <= 2, "identical findings from two specialists must merge"
-        assert "mode: `multi`" in posted["body"]
-
-    def test_one_specialist_failing_does_not_lose_the_others(self, harness, monkeypatch):
-        repo, posted = harness
-        import src.agent.multi as multi_module
-
-        real = multi_module._run_specialist
-        calls = {"n": 0}
-
-        def flaky(specialist, *args, **kwargs):
-            calls["n"] += 1
-            if specialist.name == "security":
-                raise RuntimeError("specialist exploded")
-            return real(specialist, *args, **kwargs)
-
-        monkeypatch.setattr(multi_module, "_run_specialist", flaky)
-        llm = FakeProvider(
-            [
-                turn(
-                    call(
-                        "post_finding",
-                        path="app.py", line=8, severity="high", category="correctness",
-                        title="Survived", body="b",
-                    )
-                ),
-                turn(call("finish", summary="ok")),
-            ]
-            * 4
-        )
-        main_module.run_agent_review(
-            Config(agent_mode="multi", specialists="security,correctness"),
-            llm, LLMConfig(), MagicMock(), MagicMock(), FILES, "owner/repo",
-        )
-        assert calls["n"] == 2
-        assert "Survived" in " ".join(c["body"] for c in posted["comments"])
-
-
 class TestDegradedRuns:
     def test_llm_failure_still_posts_what_it_had(self, harness):
         repo, posted = harness

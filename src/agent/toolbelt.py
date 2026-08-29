@@ -52,7 +52,7 @@ class Toolbelt:
         self.context = context
         self.collector = collector
         self.budget = budget
-        # Labels findings so a multi-agent run can say which specialist filed what.
+        # Labels each finding with what produced it: "agent" or an analyser name.
         self.source = source
 
     # --- schemas ---

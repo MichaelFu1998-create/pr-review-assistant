@@ -96,6 +96,7 @@ def main():
         model=config.openai_model,
         temperature=config.openai_temperature,
         max_tokens=config.openai_max_tokens,
+        reasoning_effort=config.reasoning_effort,
     )
 
     # Initialize GitHub
@@ -302,11 +303,7 @@ def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_na
         max_seconds=config.max_agent_seconds,
     )
 
-    if config.agent_mode == "multi":
-        from .agent.multi import run_multi_agent
-        result = run_multi_agent(llm, llm_config, config, context, budget)
-    else:
-        result = run_single_agent(llm, llm_config, config, context, budget)
+    result = run_single_agent(llm, llm_config, config, context, budget)
 
     # The non-LLM checks still run; they are cheap and catch things the agent
     # has no reason to look for.
