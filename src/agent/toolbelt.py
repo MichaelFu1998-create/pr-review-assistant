@@ -324,7 +324,11 @@ class Toolbelt:
                             "type": "string",
                             "description": (
                                 "Markdown summary of the change and your overall "
-                                "assessment. Note what is done well, not only faults."
+                                "assessment. Note what is done well, not only faults. "
+                                "Recap only defects you already reported with "
+                                "post_finding — a defect described here but never "
+                                "filed has no line, no severity and no fix, so the "
+                                "author cannot act on it."
                             ),
                         },
                         "scores": {

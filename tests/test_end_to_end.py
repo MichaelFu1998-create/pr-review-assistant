@@ -413,6 +413,49 @@ class TestAnalyserFindingsStayInTheSummary:
         assert "Plus 1 static-analysis hit," in posted["body"]
         assert "E501" in posted["body"]
 
+    def test_fail_on_ignores_dismissed_analyser_findings(self, harness, monkeypatch):
+        """ruff reports S101 on a pytest `assert` as high severity. A merge must
+        not be blocked by a hit the agent judged a false positive."""
+        from src.tools.base import Finding
+
+        monkeypatch.setattr(
+            main_module,
+            "run_prepass",
+            lambda *a, **k: (
+                [
+                    Finding(
+                        file="tests/test_app.py", line=5, severity="high",
+                        category="quality", rule_id="S101",
+                        message="Use of assert detected", tool="ruff",
+                    )
+                ],
+                ["ruff"],
+            ),
+        )
+        # The agent files nothing, so only the dismissed analyser hit remains.
+        script = [turn(call("finish", _id="c1", summary="Nothing worth reporting."))]
+        _run(harness, Config(agent_mode="agent", fail_on="high"), script=script)
+
+    def test_sarif_carries_agent_findings_only(self, harness, monkeypatch, tmp_path):
+        """Analyser hits the agent dismissed must not become security alerts.
+
+        Regression for testbed#6: ruff's E501 and S101 — which the agent named
+        as false positives in its own summary — were uploaded as code scanning
+        alerts, and GitHub re-posted each one as a PR comment.
+        """
+        target = tmp_path / "out.sarif"
+        _run(
+            self._harness_with_analysers(harness, monkeypatch),
+            Config(agent_mode="agent", output_sarif=str(target)),
+            script=self._script(),
+        )
+        doc = json.loads(target.read_text())
+        results = doc["runs"][0]["results"]
+        assert len(results) == 1
+        messages = " ".join(r["message"]["text"] for r in results)
+        assert "SQL injection" in messages
+        assert "E501" not in messages and "line too long" not in messages.lower()
+
     def test_severity_table_matches_the_comment_count(self, harness, monkeypatch):
         posted, _ = _run(self._harness_with_analysers(harness, monkeypatch),
                          script=self._script())

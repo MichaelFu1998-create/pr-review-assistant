@@ -41,7 +41,12 @@ a call, adding a parameter, replacing a comparison, tightening an except clause:
 all of these fit. When the fix needs a new dependency, a new import, or a \
 restructure beyond those lines, put the advice in `suggested_fix` as plain \
 prose instead, and say what the author has to do.
-7. Call `finish` with a summary when you are done.
+7. Call `finish` with a summary when you are done. The summary **recaps
+findings you already filed** — it is not a place to report. Every defect worth
+mentioning must have been a `post_finding` call first: anything that appears
+only in the summary has no line, no severity, no CWE, no fix, and never reaches
+the security dashboard. Before calling `finish`, re-read your summary and file
+anything you described but did not report.
 
 ## Judgement
 

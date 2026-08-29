@@ -342,10 +342,17 @@ def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_na
         logger.info("Nothing to report")
 
     if config.output_sarif:
-        path = write_sarif(result.findings, config.output_sarif, tool_version=__version__)
+        # Agent findings only, matching the inline comments. Uploading raw
+        # analyser output would file security alerts for hits the agent
+        # explicitly judged false positives — a pytest `assert` (ruff S101) or a
+        # long line (E501) — and GitHub re-posts every alert as its own PR
+        # comment, duplicating the review.
+        path = write_sarif(agent_findings, config.output_sarif, tool_version=__version__)
         logger.info(f"Wrote SARIF to {path}")
 
     if config.output_json:
+        # The report is an analytics record rather than a user-facing surface,
+        # so it keeps both streams; totals.by_source separates them.
         report = build_report(
             result.findings,
             summary=result.summary,
@@ -361,7 +368,10 @@ def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_na
         write_report(report, config.output_json)
         logger.info(f"Wrote JSON report to {config.output_json}")
 
-    failed, reason = should_fail(result.findings, config.fail_on)
+    # Gate on the agent's validated findings, for the same reason SARIF does:
+    # a merge should not be blocked by an analyser hit the agent judged a false
+    # positive. ruff's S101 on a pytest `assert` is reported as high severity.
+    failed, reason = should_fail(agent_findings, config.fail_on)
     if failed:
         logger.error(reason)
         sys.exit(1)
