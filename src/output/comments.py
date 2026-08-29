@@ -49,20 +49,7 @@ def format_finding_body(finding: AgentFinding) -> str:
     if finding.body:
         parts.append(finding.body)
 
-    fix = finding.fix
-    if fix is not None and fix.valid:
-        # A real suggestion block: GitHub renders an Apply button, and applying
-        # it replaces exactly the commented range. Validated in agent/fixes.py,
-        # because an out-of-range suggestion 422s the whole review.
-        parts.extend(
-            ["", "**Suggested fix** — apply directly:", "```suggestion", fix.replacement, "```"]
-        )
-    elif fix is not None and fix.replacement:
-        # Validation refused it, so show the code without an Apply button rather
-        # than dropping the agent's proposed fix entirely.
-        parts.extend(["", "**Suggested fix** (not auto-applyable):", "```", fix.replacement, "```"])
-    elif finding.suggested_fix:
-        parts.extend(["", "**Suggested fix:**", "```", finding.suggested_fix.strip(), "```"])
+    parts.extend(_format_fix(finding))
 
     footer = [f"source: {finding.source}"]
     if finding.evidence:
@@ -90,6 +77,50 @@ def split_by_source(
     agent = [f for f in findings if is_agent_finding(f)]
     analyser = [f for f in findings if not is_agent_finding(f)]
     return agent, analyser
+
+
+def _format_fix(finding: AgentFinding) -> list[str]:
+    """Render whichever kind of fix the finding carries.
+
+    Three outcomes, and the reader has to be able to tell them apart at a
+    glance. Previously all three used a code fence, so free-text advice looked
+    like applyable code that had somehow lost its button — which is precisely
+    the confusion this exists to prevent.
+    """
+    fix = finding.fix
+
+    if fix is not None and fix.valid:
+        # GitHub renders an Apply button for a suggestion block, and applying it
+        # replaces exactly the commented range. Validated in agent/fixes.py,
+        # because an out-of-range suggestion 422s the whole review.
+        return ["", "**Suggested fix** — apply directly:", "```suggestion", fix.replacement, "```"]
+
+    if fix is not None and fix.replacement:
+        # Validation refused it. Still show the code — it is useful — but say why
+        # there is no button rather than leaving it to be guessed at.
+        reason = fix.rejected_because or "it could not be validated against this diff"
+        return [
+            "",
+            "**Suggested fix** — apply by hand:",
+            f"_No Apply button: {reason}._",
+            "```",
+            fix.replacement,
+            "```",
+        ]
+
+    if finding.suggested_fix:
+        # Free-text advice. Not code, so it must not sit in a code fence: a fence
+        # renders prose as a horizontally scrolling monospace line and implies it
+        # is something you could apply.
+        return [
+            "",
+            "**How to fix** — manual change:",
+            "_No Apply button: this needs changes beyond the lines commented on._",
+            "",
+            finding.suggested_fix.strip(),
+        ]
+
+    return []
 
 
 def build_inline_comments(

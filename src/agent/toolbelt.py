@@ -272,8 +272,11 @@ class Toolbelt:
                         "suggested_fix": {
                             "type": "string",
                             "description": (
-                                "Optional corrected code, as prose. Use the fix_* "
-                                "fields instead when you can be exact."
+                                "Prose describing a fix that cannot be expressed as "
+                                "a replacement for the commented lines — one needing "
+                                "a new import, dependency, or a restructure. Plain "
+                                "sentences, not code. Use the fix_* fields whenever "
+                                "the change does fit the range."
                             ),
                         },
                         "fix_start_line": {
@@ -299,8 +302,9 @@ class Toolbelt:
                                 "The COMPLETE replacement text for that line range, "
                                 "including each line's original leading whitespace. "
                                 "It replaces those lines verbatim. Read the range "
-                                "with read_lines first. Only offer a fix you are "
-                                "certain of; it is one click from being committed."
+                                "with read_lines first. Provide this whenever the "
+                                "correction fits inside the lines you are commenting "
+                                "on; it becomes a one-click fix for the author."
                             ),
                         },
                     },
