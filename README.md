@@ -322,7 +322,31 @@ jobs:
 ```
 
 Findings then appear under **Security → Code scanning**, tagged with their CWE
-and tracked across runs.
+and tracked across runs. Verified on a public repository: an 11-finding review
+uploads cleanly and produces 11 alerts, severity-graded, with CWE rule ids.
+
+Code scanning is free on public repositories. Private repositories need GitHub
+Code Security (or Advanced Security).
+
+<details>
+<summary>Getting GitHub's autofix buttons on these alerts</summary>
+
+GitHub's code scanning **agentic autofix** — the *Dismiss / Edit / Commit fix*
+controls — works on third-party SARIF alerts as of its July 2026 public preview,
+so it can act on the alerts this action uploads.
+
+That surface is GitHub's, not ours. Our inline suggestions render the **Apply
+suggestion** button GitHub gives to review comments; the autofix buttons belong
+to the alert page, and no third party can add, recolour, or relabel them.
+
+Autofix additionally requires **GitHub Code Security** (or Advanced Security)
+*and* a Copilot licence with the cloud agent enabled. On a free public
+repository the alerts appear but the autofix endpoint reports no suggested fix,
+so we have not been able to verify the buttons end to end — only that the alerts
+they attach to are created correctly. GitHub also states that fix quality for
+third-party alerts is not guaranteed.
+
+</details>
 
 ### 4.5 A report for your records
 
