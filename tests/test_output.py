@@ -271,3 +271,60 @@ class TestGating:
     def test_does_not_fail_below_threshold(self):
         failed, _ = should_fail([_finding(severity="low")], "high")
         assert failed is False
+
+
+class TestSarifSchemaConstraints:
+    """GitHub validates uploaded SARIF and rejects the entire file on any
+    violation. Regression for testbed#5, where every security finding with a
+    CWE emitted the "security" tag twice and the upload failed."""
+
+    def test_tags_are_unique(self):
+        doc = build_sarif([
+            _finding(category="security", cwe="CWE-89"),
+            _finding(category="security", cwe=None, title="No cwe"),
+            _finding(category="design", cwe="CWE-208", title="Design with cwe"),
+        ])
+        for rule in doc["runs"][0]["tool"]["driver"]["rules"]:
+            tags = rule["properties"]["tags"]
+            assert len(tags) == len(set(tags)), f"duplicate tags in {rule['id']}: {tags}"
+
+    def test_security_category_with_cwe_keeps_one_security_tag(self):
+        doc = build_sarif([_finding(category="security", cwe="CWE-89")])
+        tags = doc["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["tags"]
+        assert tags.count("security") == 1
+        assert "external/cwe/cwe-89" in tags
+        assert "pr-review" in tags
+
+    def test_rule_ids_are_unique(self):
+        """SARIF also requires unique rule ids within a run."""
+        doc = build_sarif([_finding(cwe="CWE-89"), _finding(cwe="CWE-89", title="Other")])
+        ids = [r["id"] for r in doc["runs"][0]["tool"]["driver"]["rules"]]
+        assert len(ids) == len(set(ids))
+
+
+def test_sarif_validates_against_the_official_schema(tmp_path):
+    """Full-schema check, so constraints we have not thought of are caught here
+    rather than by GitHub rejecting the upload.
+
+    Skips when jsonschema or the network is unavailable; the targeted
+    uniqueItems tests above still run unconditionally.
+    """
+    jsonschema = pytest.importorskip("jsonschema")
+    import urllib.error
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(
+            "https://json.schemastore.org/sarif-2.1.0.json", timeout=15
+        ) as response:
+            schema = json.loads(response.read())
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        pytest.skip(f"SARIF schema unavailable: {e}")
+
+    doc = build_sarif([
+        _finding(category="security", cwe="CWE-89"),
+        _finding(category="correctness", cwe=None, title="No cwe", line=None),
+        _finding(category="design", cwe="CWE-208", title="Design", severity="low"),
+    ])
+    errors = sorted(jsonschema.Draft7Validator(schema).iter_errors(doc), key=lambda e: e.path)
+    assert not errors, "\n".join(f"{list(e.path)}: {e.message}" for e in errors[:5])
