@@ -226,6 +226,18 @@ class TestOutputArtifacts:
         assert report["scores"]["security"] == 1
         assert report["run"]["total_tokens"] > 0
 
+    def test_sarif_run_explains_the_second_check(self, harness, tmp_path):
+        posted, _ = _run(
+            harness,
+            Config(agent_mode="agent", output_sarif=str(tmp_path / "out.sarif")),
+        )
+        assert "> [!NOTE]" in posted["body"]
+        assert "not a broken pipeline" in posted["body"]
+
+    def test_run_without_sarif_does_not_mention_a_second_check(self, harness):
+        posted, _ = _run(harness)
+        assert "Code scanning results" not in posted["body"]
+
     def test_no_artifacts_when_paths_are_empty(self, harness, tmp_path):
         _run(harness)
         assert list(tmp_path.glob("*.sarif")) == []

@@ -25,6 +25,29 @@ def format_severity_table(findings: list[AgentFinding]) -> str:
     return "\n".join(rows)
 
 
+def format_code_scanning_note() -> list[str]:
+    """Explain the second, failing check that uploading SARIF creates.
+
+    GitHub's code scanning makes a "Code scanning results" check from the SARIF
+    we upload and fails it whenever a pull request introduces new alerts —
+    independent of this action's own fail_on. A successful run therefore shows a
+    green tick *and* a red cross, and a red cross reads as "the pipeline broke"
+    rather than "your code has issues".
+
+    Deliberately [!NOTE] (blue) rather than [!CAUTION] (red): the job here is to
+    defuse alarm, and a red callout explaining a red cross would compound it.
+    """
+    return [
+        "> [!NOTE]",
+        '> **The red ✗ on "Code scanning results" is expected.** It reports the',
+        "> findings above as security alerts, and GitHub fails that check when a",
+        "> pull request introduces new ones. The review workflow itself succeeded —",
+        "> a red cross there means issues in the code, not a broken pipeline.",
+        "> Full detail is under the repository's **Security → Code scanning** tab.",
+        "",
+    ]
+
+
 def format_how_to_act(applyable: int, pr_url: str = "") -> list[str]:
     """Explain what the buttons GitHub renders actually do.
 
@@ -127,6 +150,7 @@ def build_review_body(
     observations: dict[str, list[str]] | None = None,
     analyser_findings: list[AgentFinding] | None = None,
     pr_url: str = "",
+    sarif_enabled: bool = False,
 ) -> str:
     """Assemble the review body posted above the inline comments."""
     parts = ["## Automated Code Review", ""]
@@ -153,6 +177,9 @@ def build_review_body(
                 "",
             ]
         )
+
+    if sarif_enabled:
+        parts.extend(format_code_scanning_note())
 
     applyable, _rejected = count_fixes(findings)
     if applyable:
