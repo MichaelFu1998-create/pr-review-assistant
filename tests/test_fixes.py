@@ -182,10 +182,10 @@ class TestRendering:
         fix = validate_fix(Fix(900, 900, "whatever"), "app.py", diff(), "high")
         body = format_finding_body(self._finding(fix=fix))
         assert "```suggestion" not in body
-        assert "apply by hand" in body
+        assert "[!CAUTION]" in body
         assert "whatever" in body  # the proposed code is still shown
         # the validation reason is surfaced, not left to be guessed at
-        assert "No Apply button:" in body
+        assert "No Apply button" in body
         assert "not all part of this PR's diff" in body
 
     def test_single_line_fix_comment_payload(self):
@@ -442,8 +442,8 @@ class TestFixAffordance:
 
         # each states its own situation
         assert "apply directly" in applyable
-        assert "apply by hand" in refused
-        assert "manual change" in prose
+        assert "[!CAUTION]" in refused and "No Apply button" in refused
+        assert "[!CAUTION]" in prose and "No Apply button" in prose
 
     def test_only_the_applyable_one_omits_the_no_button_note(self):
         applyable = format_finding_body(
@@ -470,13 +470,15 @@ class TestFixAffordance:
                                  diff(), "medium"),
             )
         )
-        assert "No Apply button:" in body
+        assert "[!CAUTION]" in body
+        assert "No Apply button" in body
         assert "only high-confidence findings" in body
 
     def test_no_fix_at_all_adds_nothing(self):
         body = format_finding_body(self._finding())
         assert "Apply button" not in body
-        assert "Suggested fix" not in body and "How to fix" not in body
+        assert "[!CAUTION]" not in body
+        assert "Suggested fix" not in body
 
     def test_prose_survives_multiple_paragraphs(self):
         body = format_finding_body(

@@ -114,10 +114,10 @@ class TestFindingBody:
         body = format_finding_body(
             _finding(suggested_fix="Use PyJWT with an explicit algorithm allow-list.")
         )
-        assert "**How to fix** — manual change:" in body
+        assert "> [!CAUTION]" in body
         assert "```" not in body
         assert "No Apply button" in body
-        assert "beyond the lines commented on" in body
+        assert "beyond the lines commented" in body
 
     def test_evidence_and_source_in_footer(self):
         body = format_finding_body(_finding(source="bandit", evidence=["bandit:B301"]))
