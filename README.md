@@ -697,7 +697,36 @@ no API key, no network, no cost.
 ```bash
 pip install -r requirements-dev.txt
 pytest tests/ -q
+ruff check src/ tests/ --select F,E9
 ```
+
+**Run it against a real PR locally** — the action reads `INPUT_*` environment
+variables, which is all the Docker entrypoint does:
+
+```bash
+export INPUT_GITHUB_TOKEN="ghp_..."
+export INPUT_GITHUB_PR_ID="123"
+export INPUT_XAI_API_KEY="xai-..."
+export INPUT_TOOLS="none"        # skip analysers for a quick loop
+export INPUT_LOGGING="debug"     # full prompts, tool output, token counts
+export GITHUB_REPOSITORY="your-org/your-repo"
+export GITHUB_WORKSPACE="."
+
+python -m src.main
+```
+
+**Test the container** — this is what actually ships:
+
+```bash
+docker build -t pr-review-test .
+docker run --rm \
+  -e INPUT_GITHUB_TOKEN -e INPUT_GITHUB_PR_ID -e INPUT_XAI_API_KEY \
+  -e INPUT_TOOLS=none -e INPUT_LOGGING=debug \
+  -e GITHUB_REPOSITORY -e GITHUB_WORKSPACE=/workspace \
+  -v "$(pwd):/workspace" pr-review-test
+```
+
+Use a throwaway repository rather than a real PR — every run posts a review.
 
 ---
 

@@ -8,7 +8,7 @@ SEVERITY_ORDER_DISPLAY = ("critical", "high", "medium", "low", "info")
 
 
 def severity_counts(findings: list[AgentFinding]) -> dict[str, int]:
-    counts = {s: 0 for s in SEVERITY_ORDER_DISPLAY}
+    counts = dict.fromkeys(SEVERITY_ORDER_DISPLAY, 0)
     for finding in findings:
         counts[finding.severity] = counts.get(finding.severity, 0) + 1
     return counts
