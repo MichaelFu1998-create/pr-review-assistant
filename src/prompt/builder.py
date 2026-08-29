@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from ..config import Config
 from ..llm.base import LLMProvider
 from .templates import (
+    DO_NOT_REPORT,
     FOCUS_EMPHASIS,
     PERSONAS,
+    REPORTING_BAR,
     SCORING_PROMPT,
     STANDARDIZED_CHECKLIST,
     detect_language,
@@ -137,16 +139,16 @@ def _build_context(pr_description: str, comments: list[str], readme: str) -> str
 
 def _build_instructions(config: Config) -> str:
     """Build review instructions: standardized checklist + optional focus emphasis + custom notes."""
-    parts = ["## Review Instructions", STANDARDIZED_CHECKLIST]
+    parts = ["# Review Instructions", REPORTING_BAR, STANDARDIZED_CHECKLIST, DO_NOT_REPORT]
 
     selected = set(config.focus_areas)
     if selected and selected != ALL_FOCUS_AREAS:
         emphasis_lines = [FOCUS_EMPHASIS[a] for a in config.focus_areas if a in FOCUS_EMPHASIS]
         if emphasis_lines:
-            parts.append("### Focus Emphasis\n" + "\n".join(f"- {line}" for line in emphasis_lines))
+            parts.append("## Focus\n" + "\n".join(f"- {line}" for line in emphasis_lines))
 
     if config.custom_instructions:
-        parts.append(f"### Additional Instructions\n{config.custom_instructions}")
+        parts.append(f"## Project-specific instructions\n{config.custom_instructions}")
 
     return "\n\n".join(parts)
 
