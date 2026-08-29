@@ -46,6 +46,11 @@ class Config:
     custom_instructions: str = ""
     enable_scoring: bool = False
 
+    # Output surfaces (v2)
+    output_sarif: str = ""              # path to write SARIF to; empty disables
+    output_json: str = ""               # path to write the JSON report to
+    fail_on: str = ""                   # severity threshold that fails the run
+
     # System
     logging_level: str = "warning"
 
@@ -78,34 +83,54 @@ def _env(name: str, default: str = "") -> str:
     return os.environ.get(f"INPUT_{name.upper()}", default)
 
 
+# Settings a repository may override through .pr-review.json. Their action
+# inputs default to "" so that "unset" is distinguishable from "explicitly set
+# to the default value"; the real defaults are applied after the merge.
+#
+# Before this, action.yaml sent a non-empty default for every input, so
+# _merge_repo_config's "was the env var set?" check was always true and every
+# `review` setting in .pr-review.json was silently ignored.
+OVERRIDABLE_DEFAULTS: dict[str, object] = {
+    "tools": "auto",
+    "severity_threshold": "low",
+    "review_focus": "all",
+    "review_persona": "normal",
+    "max_files": 10,
+}
+
+
 def load_config() -> Config:
     """Load configuration from environment variables, overlaid with .pr-review.json if present."""
     config = Config(
         openai_api_key=_env("OPENAI_API_KEY"),
         github_token=_env("GITHUB_TOKEN"),
-        github_pr_id=int(_env("GITHUB_PR_ID", "0")),
-        llm_provider=_env("LLM_PROVIDER", "openai"),
-        openai_model=_env("OPENAI_MODEL", "gpt-5.4-mini-2026-03-17"),
-        openai_temperature=float(_env("OPENAI_TEMPERATURE", "1")),
-        openai_max_tokens=int(_env("OPENAI_MAX_TOKENS", "32000")),
+        github_pr_id=int(_env("GITHUB_PR_ID", "0") or "0"),
+        llm_provider=_env("LLM_PROVIDER", "") or "openai",
+        openai_model=_env("OPENAI_MODEL", "") or "gpt-5.4-mini-2026-03-17",
+        openai_temperature=float(_env("OPENAI_TEMPERATURE", "") or "1"),
+        openai_max_tokens=int(_env("OPENAI_MAX_TOKENS", "") or "32000"),
         api_base_url=_env("API_BASE_URL", ""),
         anthropic_api_key=_env("ANTHROPIC_API_KEY", ""),
         xai_api_key=_env("XAI_API_KEY", ""),
-        files=_env("FILES", "*"),
-        max_files=int(_env("MAX_FILES", "10")),
-        tools=_env("TOOLS", "auto"),
-        severity_threshold=_env("SEVERITY_THRESHOLD", "low"),
-        agent_mode=_env("AGENT_MODE", "pipeline"),
-        max_agent_steps=int(_env("MAX_AGENT_STEPS", "25")),
-        max_agent_tokens=int(_env("MAX_AGENT_TOKENS", "150000")),
-        max_agent_seconds=float(_env("MAX_AGENT_SECONDS", "600")),
-        max_findings=int(_env("MAX_FINDINGS", "100")),
+        files=_env("FILES", "") or "*",
+        agent_mode=_env("AGENT_MODE", "") or "pipeline",
+        max_agent_steps=int(_env("MAX_AGENT_STEPS", "") or "25"),
+        max_agent_tokens=int(_env("MAX_AGENT_TOKENS", "") or "150000"),
+        max_agent_seconds=float(_env("MAX_AGENT_SECONDS", "") or "600"),
+        max_findings=int(_env("MAX_FINDINGS", "") or "100"),
         specialists=_env("SPECIALISTS", ""),
-        review_focus=_env("REVIEW_FOCUS", "all"),
-        review_persona=_env("REVIEW_PERSONA", "normal"),
         custom_instructions=_env("CUSTOM_INSTRUCTIONS", ""),
-        enable_scoring=_env("ENABLE_SCORING", "false").lower() == "true",
-        logging_level=_env("LOGGING", "warning"),
+        output_sarif=_env("OUTPUT_SARIF", ""),
+        output_json=_env("OUTPUT_JSON", ""),
+        fail_on=_env("FAIL_ON", ""),
+        logging_level=_env("LOGGING", "") or "warning",
+        # Left empty on purpose so .pr-review.json can win; defaulted below.
+        tools=_env("TOOLS", ""),
+        severity_threshold=_env("SEVERITY_THRESHOLD", ""),
+        review_focus=_env("REVIEW_FOCUS", ""),
+        review_persona=_env("REVIEW_PERSONA", ""),
+        max_files=int(_env("MAX_FILES", "") or "0"),
+        enable_scoring=_env("ENABLE_SCORING", "").lower() == "true",
     )
 
     # Overlay .pr-review.json if it exists
@@ -120,7 +145,20 @@ def load_config() -> Config:
         except Exception as e:
             logger.warning(f"Failed to load .pr-review.json: {e}")
 
+    _apply_defaults(config)
     return config
+
+
+def _apply_defaults(config: Config) -> None:
+    """Fill in defaults for any overridable setting still unset.
+
+    Runs after the repo config merge, so an explicit action input wins over
+    .pr-review.json, which wins over these.
+    """
+    for name, default in OVERRIDABLE_DEFAULTS.items():
+        current = getattr(config, name)
+        if current in ("", 0, None):
+            setattr(config, name, default)
 
 
 def _merge_repo_config(config: Config, repo_config: dict) -> None:

@@ -23,6 +23,8 @@ from .tools.stack_detector import detect_stack
 from .checks.pr_quality import check_pr_quality
 from .checks.test_coverage import analyze_test_coverage
 from .checks.git_hygiene import check_git_hygiene
+from .github_client import fetch_pr_metadata
+from .diff.patch import DiffMap
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +69,7 @@ def validate_provider_key(config: Config) -> str | None:
 
 
 def main():
+    """Entry point. Dispatches to the v1 pipeline or the v2 agent."""
     config = load_config()
 
     # Setup logging
@@ -113,6 +116,17 @@ def main():
         sys.exit(1)
 
     logger.info(f"Reviewing {n_files} file(s)")
+
+    if config.agent_mode != "pipeline":
+        run_agent_review(config, llm, llm_config, repo, pull, files, repo_name)
+        return
+
+    run_pipeline_review(config, llm, llm_config, repo, pull, files)
+
+
+def run_pipeline_review(config, llm, llm_config, repo, pull, files):
+    """The v1 review path, unchanged: one single-shot LLM call per file."""
+    n_files = len(files)
 
     # Fetch PR context
     pr_description, pr_comments, readme = fetch_contextual_info(pull, repo)
@@ -224,6 +238,127 @@ def main():
         safe_create_review(pull, review_body, comments)
     else:
         logger.info("No review comments to post")
+
+
+
+def run_prepass(config: Config, files: dict, workspace: str):
+    """Run the deterministic analysers before the agent starts.
+
+    The agent begins with these findings for free and can request more with
+    run_analyzer. Returns (findings, tool_names).
+    """
+    if config.tools == "none":
+        return [], []
+
+    changed = list(files.keys())
+    detected = detect_stack(changed, workspace)
+    logger.info(f"Detected languages: {detected}")
+
+    selected = get_tools_for_config(detected, config.tools, config.tools_list or None)
+    if not selected:
+        return [], []
+
+    if not os.path.exists(os.path.join(workspace, ".git")):
+        logger.warning(
+            "Repository not checked out in workspace. Static analysis and the "
+            "agent's file tools require 'actions/checkout' before this action."
+        )
+        return [], [t.name for t in selected]
+
+    findings = run_tools(
+        selected, changed, workspace, config.tool_configs, config.severity_threshold,
+    )
+    logger.info(f"Pre-pass produced {len(findings)} finding(s)")
+    return findings, [t.name for t in selected]
+
+
+def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_name):
+    """The v2 agentic path: investigate with tools, emit structured findings."""
+    from .agent.budget import Budget
+    from .agent.context import PRMetadata, ReviewContext
+    from .agent.single import run_single_agent
+    from .output.comments import build_inline_comments
+    from .output.gating import should_fail
+    from .output.json_report import build_report, write_report
+    from .output.sarif import write_sarif
+    from .output.summary import build_review_body
+    from . import __version__
+
+    workspace = os.environ.get("GITHUB_WORKSPACE", ".")
+    tool_findings, tools_used = run_prepass(config, files, workspace)
+
+    metadata = PRMetadata(**fetch_pr_metadata(pull))
+    context = ReviewContext(
+        workspace=workspace,
+        diff=DiffMap.from_pull_files(files),
+        metadata=metadata,
+        tool_findings=list(tool_findings),
+        tools_used=list(tools_used),
+    )
+
+    budget = Budget(
+        max_steps=config.max_agent_steps,
+        max_tokens=config.max_agent_tokens,
+        max_seconds=config.max_agent_seconds,
+    )
+
+    if config.agent_mode == "multi":
+        from .agent.multi import run_multi_agent
+        result = run_multi_agent(llm, llm_config, config, context, budget)
+    else:
+        result = run_single_agent(llm, llm_config, config, context, budget)
+
+    # The non-LLM checks still run; they are cheap and catch things the agent
+    # has no reason to look for.
+    changed = list(files.keys())
+    observations = {
+        "PR Quality": check_pr_quality(pull, len(files)) if "education" in config.focus_areas else [],
+        "Test Coverage": analyze_test_coverage(changed, workspace),
+        "Git Hygiene": check_git_hygiene(pull, files, workspace),
+    }
+
+    comments, unanchored = build_inline_comments(result.findings, context.diff)
+    review_body = build_review_body(
+        findings=result.findings,
+        summary=result.summary,
+        scores=result.scores,
+        unanchored=unanchored,
+        tools_used=context.tools_used,
+        budget=result.budget,
+        agent_mode=config.agent_mode,
+        model=config.openai_model,
+        observations=observations,
+    )
+
+    if comments or result.findings or result.summary:
+        safe_create_review(pull, review_body, comments)
+    else:
+        logger.info("Nothing to report")
+
+    if config.output_sarif:
+        path = write_sarif(result.findings, config.output_sarif, tool_version=__version__)
+        logger.info(f"Wrote SARIF to {path}")
+
+    if config.output_json:
+        report = build_report(
+            result.findings,
+            summary=result.summary,
+            scores=result.scores,
+            pr_number=config.github_pr_id,
+            repository=repo_name,
+            agent_mode=config.agent_mode,
+            model=config.openai_model,
+            provider=config.llm_provider,
+            tools_used=context.tools_used,
+            budget=result.budget,
+        )
+        write_report(report, config.output_json)
+        logger.info(f"Wrote JSON report to {config.output_json}")
+
+    failed, reason = should_fail(result.findings, config.fail_on)
+    if failed:
+        logger.error(reason)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

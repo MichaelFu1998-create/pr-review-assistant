@@ -436,9 +436,7 @@ class Toolbelt:
                 f"({result.execution_time_ms}ms)."
             )
 
-        self.context.tool_findings.extend(result.findings)
-        if name not in self.context.tools_used:
-            self.context.tools_used.append(name)
+        self.context.record_analyzer_run(name, result.findings)
 
         return ToolOutcome(_truncate(_format_tool_findings(name, result.findings)))
 

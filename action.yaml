@@ -1,5 +1,5 @@
 name: "PR Code Review"
-description: "LLM‑powered PR reviews with static analysis, multi‑language support, personas, and learning‑oriented scoring."
+description: "Agentic LLM code review with static analysis, multi-language support, SARIF output, and learning-oriented scoring."
 branding:
   icon: "check-circle"
   color: "blue"
@@ -7,84 +7,141 @@ branding:
 inputs:
   # --- Required ---
   openai_api_key:
-    description: "OpenAI API Key (or Anthropic key if using llm_provider: anthropic)"
-    required: true
+    description: "OpenAI API key. Leave empty when using another provider."
+    required: false
+    default: ""
   github_token:
-    description: "GitHub API Token with PR read/write permissions"
+    description: "GitHub token with PR read/write permissions"
     required: true
   github_pr_id:
     description: "GitHub PR number to review"
     required: true
 
+  # --- Agent settings (v2) ---
+  agent_mode:
+    description: >-
+      'pipeline' (v1: one single-shot LLM call per file), 'single' (v2: one
+      agent that investigates with tools), or 'multi' (v2: parallel
+      specialists). 'multi' costs several times 'single'.
+    required: false
+    default: "pipeline"
+  max_agent_steps:
+    description: "Maximum tool-calling turns per agent before it must stop."
+    required: false
+    default: "25"
+  max_agent_tokens:
+    description: "Token budget for one review run. Shared across specialists in multi mode."
+    required: false
+    default: "150000"
+  max_agent_seconds:
+    description: "Wall-clock limit for one agent, in seconds."
+    required: false
+    default: "600"
+  max_findings:
+    description: "Maximum findings recorded per agent."
+    required: false
+    default: "100"
+  specialists:
+    description: >-
+      Comma-separated specialists for multi mode (security, correctness,
+      testing, design, dependencies, performance, infrastructure, frontend).
+      Empty means choose automatically from the changed files.
+    required: false
+    default: ""
+
   # --- LLM Settings ---
-  openai_model:
-    description: "LLM model name (e.g., gpt-5.4-mini-2026-03-17, gpt-5-nano, claude-sonnet-4-6)"
-    required: false
-    default: "gpt-5.4-mini-2026-03-17"
-  openai_temperature:
-    description: "Sampling temperature [0, 1]. Higher values = more creative reviews."
-    required: false
-    default: "1"
-  openai_max_tokens:
-    description: "Maximum tokens in the LLM response."
-    required: false
-    default: "32000"
   llm_provider:
-    description: "LLM provider: openai, anthropic, or openai (with api_base_url for compatible APIs)"
+    description: "openai, anthropic, or xai"
     required: false
     default: "openai"
+  openai_model:
+    description: "Model name (e.g. gpt-5.4-mini-2026-03-17, claude-sonnet-4-6, grok-4)"
+    required: false
+    default: ""
+  openai_temperature:
+    description: "Sampling temperature. Dropped automatically if the model rejects it."
+    required: false
+    default: ""
+  openai_max_tokens:
+    description: "Maximum tokens per LLM response."
+    required: false
+    default: ""
   api_base_url:
-    description: "Custom API base URL for OpenAI-compatible APIs (Ollama, vLLM, Azure, etc.)"
+    description: "Custom base URL for an OpenAI-compatible API (Ollama, vLLM, Azure)"
     required: false
     default: ""
   anthropic_api_key:
-    description: "Anthropic API Key (required when llm_provider is 'anthropic')"
+    description: "Anthropic API key (required when llm_provider is 'anthropic')"
+    required: false
+    default: ""
+  xai_api_key:
+    description: "xAI API key (required when llm_provider is 'xai')"
     required: false
     default: ""
 
   # --- File Filtering ---
   files:
-    description: "Comma-separated glob patterns for files to review (e.g., '*.py,src/*.ts')"
+    description: "Comma-separated glob patterns for files to review (e.g. '*.py,src/*.ts')"
     required: false
-    default: "*"
+    default: ""
   max_files:
-    description: "Maximum number of files to review per PR"
+    description: "Maximum number of files to review per PR. Empty uses .pr-review.json, else 10."
     required: false
-    default: "10"
+    default: ""
 
   # --- Static Analysis Tools ---
   tools:
-    description: "Tools to run: 'auto' (detect from tech stack), 'none' (LLM only), or comma-separated list (e.g., 'semgrep,ruff,eslint')"
+    description: >-
+      'auto' (detect from the tech stack), 'none' (LLM only), or a
+      comma-separated list. Empty uses .pr-review.json, else 'auto'.
     required: false
-    default: "auto"
+    default: ""
   severity_threshold:
-    description: "Minimum severity to report from tools: critical, high, medium, low, info"
+    description: "Minimum tool severity to report. Empty uses .pr-review.json, else 'low'."
     required: false
-    default: "low"
+    default: ""
 
   # --- Review Settings ---
   review_focus:
-    description: "Review focus areas: security, quality, performance, education, all"
+    description: "security, quality, performance, education, all. Empty uses .pr-review.json, else 'all'."
     required: false
-    default: "all"
+    default: ""
   review_persona:
-    description: "Review style: normal (balanced), mentor (educational), security-auditor. All personas share the same standardized 8-category defect checklist; the persona only changes tone and emphasis."
+    description: "normal, mentor, or security-auditor. Empty uses .pr-review.json, else 'normal'."
     required: false
-    default: "normal"
+    default: ""
   custom_instructions:
-    description: "Additional instructions for the LLM reviewer (e.g., 'We use Django REST Framework')"
+    description: "Extra instructions for the reviewer (e.g. 'We use Django REST Framework')"
     required: false
     default: ""
   enable_scoring:
-    description: "Enable educational scoring rubric (true/false). Adds a 0-25 score to each review."
+    description: "Add a 0-25 educational score to the review (true/false)."
     required: false
-    default: "false"
+    default: ""
+
+  # --- Output surfaces (v2) ---
+  output_sarif:
+    description: >-
+      Path to write SARIF to, for github/codeql-action/upload-sarif. Empty
+      disables. Requires the 'security-events: write' permission.
+    required: false
+    default: ""
+  output_json:
+    description: "Path to write the machine-readable JSON report to. Empty disables."
+    required: false
+    default: ""
+  fail_on:
+    description: >-
+      Fail the check when findings at this severity or worse exist
+      (critical, high, medium, low). Empty never fails.
+    required: false
+    default: ""
 
   # --- System ---
   logging:
     description: "Log level: debug, info, warning, error"
     required: false
-    default: "warning"
+    default: ""
 
 runs:
   using: "docker"
@@ -93,12 +150,19 @@ runs:
     INPUT_OPENAI_API_KEY: ${{ inputs.openai_api_key }}
     INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}
     INPUT_GITHUB_PR_ID: ${{ inputs.github_pr_id }}
+    INPUT_AGENT_MODE: ${{ inputs.agent_mode }}
+    INPUT_MAX_AGENT_STEPS: ${{ inputs.max_agent_steps }}
+    INPUT_MAX_AGENT_TOKENS: ${{ inputs.max_agent_tokens }}
+    INPUT_MAX_AGENT_SECONDS: ${{ inputs.max_agent_seconds }}
+    INPUT_MAX_FINDINGS: ${{ inputs.max_findings }}
+    INPUT_SPECIALISTS: ${{ inputs.specialists }}
+    INPUT_LLM_PROVIDER: ${{ inputs.llm_provider }}
     INPUT_OPENAI_MODEL: ${{ inputs.openai_model }}
     INPUT_OPENAI_TEMPERATURE: ${{ inputs.openai_temperature }}
     INPUT_OPENAI_MAX_TOKENS: ${{ inputs.openai_max_tokens }}
-    INPUT_LLM_PROVIDER: ${{ inputs.llm_provider }}
     INPUT_API_BASE_URL: ${{ inputs.api_base_url }}
     INPUT_ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+    INPUT_XAI_API_KEY: ${{ inputs.xai_api_key }}
     INPUT_FILES: ${{ inputs.files }}
     INPUT_MAX_FILES: ${{ inputs.max_files }}
     INPUT_TOOLS: ${{ inputs.tools }}
@@ -107,4 +171,7 @@ runs:
     INPUT_REVIEW_PERSONA: ${{ inputs.review_persona }}
     INPUT_CUSTOM_INSTRUCTIONS: ${{ inputs.custom_instructions }}
     INPUT_ENABLE_SCORING: ${{ inputs.enable_scoring }}
+    INPUT_OUTPUT_SARIF: ${{ inputs.output_sarif }}
+    INPUT_OUTPUT_JSON: ${{ inputs.output_json }}
+    INPUT_FAIL_ON: ${{ inputs.fail_on }}
     INPUT_LOGGING: ${{ inputs.logging }}

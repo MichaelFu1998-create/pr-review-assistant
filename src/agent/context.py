@@ -7,6 +7,7 @@ keeps the agent read-only and inside the workspace.
 
 import logging
 import os
+import threading
 from dataclasses import dataclass, field
 
 from ..diff.patch import DiffMap
@@ -38,6 +39,16 @@ class ReviewContext:
     tool_findings: list[Finding] = field(default_factory=list)
     tools_used: list[str] = field(default_factory=list)
     readme: str = ""
+    # In multi mode several specialists share one context and may each call
+    # run_analyzer; the appends below must not interleave.
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def record_analyzer_run(self, tool_name: str, findings: list[Finding]) -> None:
+        """Thread-safely fold an on-demand analyser run into the shared context."""
+        with self._lock:
+            self.tool_findings.extend(findings)
+            if tool_name not in self.tools_used:
+                self.tools_used.append(tool_name)
 
     @property
     def changed_paths(self) -> list[str]:
