@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from src.agent.findings import AgentFinding
 from src.diff.patch import DiffMap
 from src.output.comments import build_inline_comments, encode_path, format_finding_body
