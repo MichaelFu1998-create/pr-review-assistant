@@ -53,24 +53,24 @@ inputs:
     description: "xai (default), openai, or anthropic"
     required: false
     default: "xai"
-  openai_model:
+  model:
     description: >-
       Model name for whichever provider is selected (e.g. grok-4.6,
       gpt-5.4-mini-2026-03-17, claude-sonnet-4-6). Defaults to grok-4.6.
+    required: false
+    default: ""
+  temperature:
+    description: "Sampling temperature. Dropped automatically if the model rejects it."
+    required: false
+    default: ""
+  max_tokens:
+    description: "Maximum tokens per LLM response."
     required: false
     default: ""
   reasoning_effort:
     description: >-
       Depth/cost dial for reasoning models such as grok-4.6:
       low, medium, high, or xhigh. Empty leaves it to the provider.
-    required: false
-    default: ""
-  openai_temperature:
-    description: "Sampling temperature. Dropped automatically if the model rejects it."
-    required: false
-    default: ""
-  openai_max_tokens:
-    description: "Maximum tokens per LLM response."
     required: false
     default: ""
   api_base_url:
@@ -83,6 +83,20 @@ inputs:
     default: ""
   xai_api_key:
     description: "xAI API key (required when llm_provider is 'xai')"
+    required: false
+    default: ""
+
+  # --- Deprecated: renamed in v2.1, still honoured ---
+  openai_model:
+    description: "DEPRECATED — use 'model'. Named for OpenAI but sets the model for every provider."
+    required: false
+    default: ""
+  openai_temperature:
+    description: "DEPRECATED — use 'temperature'."
+    required: false
+    default: ""
+  openai_max_tokens:
+    description: "DEPRECATED — use 'max_tokens'."
     required: false
     default: ""
 
@@ -164,8 +178,11 @@ runs:
     INPUT_MAX_FINDINGS: ${{ inputs.max_findings }}
     INPUT_SUGGEST_FIXES: ${{ inputs.suggest_fixes }}
     INPUT_LLM_PROVIDER: ${{ inputs.llm_provider }}
-    INPUT_OPENAI_MODEL: ${{ inputs.openai_model }}
+    INPUT_MODEL: ${{ inputs.model }}
+    INPUT_TEMPERATURE: ${{ inputs.temperature }}
+    INPUT_MAX_TOKENS: ${{ inputs.max_tokens }}
     INPUT_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
+    INPUT_OPENAI_MODEL: ${{ inputs.openai_model }}
     INPUT_OPENAI_TEMPERATURE: ${{ inputs.openai_temperature }}
     INPUT_OPENAI_MAX_TOKENS: ${{ inputs.openai_max_tokens }}
     INPUT_API_BASE_URL: ${{ inputs.api_base_url }}

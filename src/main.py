@@ -93,9 +93,9 @@ def main():
     # Initialize LLM provider
     llm = create_llm_provider(config)
     llm_config = LLMConfig(
-        model=config.openai_model,
-        temperature=config.openai_temperature,
-        max_tokens=config.openai_max_tokens,
+        model=config.model,
+        temperature=config.temperature,
+        max_tokens=config.max_tokens,
         reasoning_effort=config.reasoning_effort,
     )
 
@@ -332,7 +332,7 @@ def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_na
         tools_used=context.tools_used,
         budget=result.budget,
         agent_mode=config.agent_mode,
-        model=config.openai_model,
+        model=config.model,
         observations=observations,
         analyser_findings=analyser_findings,
         pr_url=pr_url,
@@ -355,7 +355,7 @@ def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_na
             pr_number=config.github_pr_id,
             repository=repo_name,
             agent_mode=config.agent_mode,
-            model=config.openai_model,
+            model=config.model,
             provider=config.llm_provider,
             tools_used=context.tools_used,
             budget=result.budget,

@@ -135,10 +135,67 @@ class TestAgentSettings:
 
     def test_numeric_inputs_tolerate_empty_strings(self, workspace, monkeypatch):
         for name in ("MAX_AGENT_STEPS", "MAX_AGENT_TOKENS", "MAX_AGENT_SECONDS",
-                     "MAX_FINDINGS", "OPENAI_MAX_TOKENS", "OPENAI_TEMPERATURE",
-                     "GITHUB_PR_ID"):
+                     "MAX_FINDINGS", "MAX_TOKENS", "TEMPERATURE", "GITHUB_PR_ID"):
             monkeypatch.setenv(f"INPUT_{name}", "")
         config = load_config()
         assert config.max_agent_steps == 25
-        assert config.openai_max_tokens == 32000
+        assert config.max_tokens == 32000
         assert config.github_pr_id == 0
+
+
+class TestProviderNeutralNames:
+    """openai_model was fine when OpenAI was the only provider; it actively
+    misleads now that the same input names a Grok or Claude model."""
+
+    def test_new_names_are_read(self, workspace, monkeypatch):
+        monkeypatch.setenv("INPUT_MODEL", "claude-sonnet-4-6")
+        monkeypatch.setenv("INPUT_TEMPERATURE", "0.4")
+        monkeypatch.setenv("INPUT_MAX_TOKENS", "9000")
+        config = load_config()
+        assert config.model == "claude-sonnet-4-6"
+        assert config.temperature == 0.4
+        assert config.max_tokens == 9000
+
+    def test_defaults(self, workspace):
+        config = load_config()
+        assert config.model == "grok-4.6"
+        assert config.temperature == 1.0
+        assert config.max_tokens == 32000
+
+    def test_legacy_names_still_work(self, workspace, monkeypatch):
+        """v2.0 workflows must not break."""
+        monkeypatch.setenv("INPUT_OPENAI_MODEL", "gpt-5.4-mini-2026-03-17")
+        monkeypatch.setenv("INPUT_OPENAI_TEMPERATURE", "0.2")
+        monkeypatch.setenv("INPUT_OPENAI_MAX_TOKENS", "4096")
+        config = load_config()
+        assert config.model == "gpt-5.4-mini-2026-03-17"
+        assert config.temperature == 0.2
+        assert config.max_tokens == 4096
+
+    def test_legacy_name_warns(self, workspace, monkeypatch, caplog):
+        monkeypatch.setenv("INPUT_OPENAI_MODEL", "grok-4.6")
+        with caplog.at_level("WARNING"):
+            load_config()
+        assert "deprecated" in caplog.text
+        assert "openai_model" in caplog.text and "'model'" in caplog.text
+
+    def test_new_name_wins_over_legacy(self, workspace, monkeypatch):
+        monkeypatch.setenv("INPUT_MODEL", "grok-4.6")
+        monkeypatch.setenv("INPUT_OPENAI_MODEL", "gpt-4o")
+        assert load_config().model == "grok-4.6"
+
+    def test_new_name_does_not_warn(self, workspace, monkeypatch, caplog):
+        monkeypatch.setenv("INPUT_MODEL", "grok-4.6")
+        with caplog.at_level("WARNING"):
+            load_config()
+        assert "deprecated" not in caplog.text
+
+    def test_provider_key_inputs_keep_their_names(self, workspace, monkeypatch):
+        """openai_api_key is correctly named: it really is the OpenAI key."""
+        monkeypatch.setenv("INPUT_OPENAI_API_KEY", "sk-x")
+        monkeypatch.setenv("INPUT_ANTHROPIC_API_KEY", "sk-ant-x")
+        monkeypatch.setenv("INPUT_XAI_API_KEY", "xai-x")
+        config = load_config()
+        assert config.openai_api_key == "sk-x"
+        assert config.anthropic_api_key == "sk-ant-x"
+        assert config.xai_api_key == "xai-x"
