@@ -328,6 +328,18 @@ uploads cleanly and produces 11 alerts, severity-graded, with CWE rule ids.
 Code scanning is free on public repositories. Private repositories need GitHub
 Code Security (or Advanced Security).
 
+> [!IMPORTANT]
+> **Uploading SARIF adds a second check that can fail your PR.** GitHub creates
+> a `Code scanning results / pr-review-assistant` check and fails it when a PR
+> introduces new alerts — independent of this action's `fail_on`, which stays
+> off. It also posts each alert as its own PR comment, alongside the inline
+> review comments. If you only want the Security tab and not a merge gate,
+> adjust **Settings → Code security → Code scanning → Check failure severity**.
+
+Only the reviewer's own findings are uploaded, not raw analyser output. An
+analyser hit the reviewer judged a false positive — a pytest `assert`, an
+over-long line — should not become a security alert.
+
 <details>
 <summary>Getting GitHub's autofix buttons on these alerts</summary>
 
