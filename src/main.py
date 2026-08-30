@@ -301,7 +301,11 @@ def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_na
         max_seconds=config.max_agent_seconds,
     )
 
-    result = run_single_agent(llm, llm_config, config, context, budget)
+    if config.agent_mode == "adaptive":
+        from .agent.adaptive import run_adaptive_agent
+        result = run_adaptive_agent(llm, llm_config, config, context, budget)
+    else:
+        result = run_single_agent(llm, llm_config, config, context, budget)
 
     # The non-LLM checks still run; they are cheap and catch things the agent
     # has no reason to look for.
@@ -337,6 +341,7 @@ def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_na
         # Only when SARIF is actually uploaded; otherwise the note would
         # describe a check that does not exist.
         sarif_enabled=bool(config.output_sarif),
+        custom_rules=getattr(result, "custom_rules", []),
     )
 
     if comments or result.findings or result.summary:
@@ -367,6 +372,7 @@ def run_agent_review(config: Config, llm, llm_config, repo, pull, files, repo_na
             provider=config.llm_provider,
             tools_used=context.tools_used,
             budget=result.budget,
+            custom_rules=getattr(result, "custom_rules", []),
         )
         write_report(report, config.output_json)
         logger.info(f"Wrote JSON report to {config.output_json}")

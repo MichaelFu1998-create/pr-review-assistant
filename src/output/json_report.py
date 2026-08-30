@@ -23,6 +23,7 @@ def build_report(
     provider: str = "",
     tools_used: list[str] | None = None,
     budget: dict | None = None,
+    custom_rules: list | None = None,
 ) -> dict:
     categories: dict[str, int] = {}
     for finding in findings:
@@ -50,6 +51,9 @@ def build_report(
             "fixes_applyable": count_fixes(findings)[0],
             "fixes_rejected": count_fixes(findings)[1],
         },
+        # Adaptive mode: what the reviewer chose to check, and whether it fired.
+        # Empty in other modes.
+        "custom_rules": [r.to_dict() for r in (custom_rules or [])],
         "findings": [f.to_dict() for f in findings],
     }
 

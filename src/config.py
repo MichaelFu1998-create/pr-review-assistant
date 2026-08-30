@@ -33,11 +33,12 @@ class Config:
     severity_threshold: str = "low"
 
     # Agent settings (v2)
-    agent_mode: str = "agent"           # agent (v2, default) | pipeline (v1)
+    agent_mode: str = "agent"           # agent (default) | adaptive | pipeline (v1)
     max_agent_steps: int = 25
     max_agent_tokens: int = 150_000
     max_agent_seconds: float = 600.0
     max_findings: int = 100
+    max_custom_rules: int = 10           # adaptive mode: cap on authored rules
     reasoning_effort: str = "medium"     # reasoning models: low|medium|high|xhigh
     suggest_fixes: bool = True           # render applyable GitHub suggestions
 
@@ -128,6 +129,8 @@ def _normalize_agent_mode(value: str) -> str:
     mode = (value or "").strip().lower()
     if mode in ("", "agent", "single"):
         return "agent"
+    if mode in ("adaptive", "evolving"):
+        return "adaptive"
     if mode == "pipeline":
         return "pipeline"
     if mode == "multi":
@@ -155,9 +158,10 @@ def load_config() -> Config:
         files=_env("FILES", "") or "*",
         agent_mode=_normalize_agent_mode(_env("AGENT_MODE", "")),
         max_agent_steps=int(_env("MAX_AGENT_STEPS", "") or "25"),
-        max_agent_tokens=int(_env("MAX_AGENT_TOKENS", "") or "150000"),
+        max_agent_tokens=int(_env("MAX_AGENT_TOKENS", "") or "0"),
         max_agent_seconds=float(_env("MAX_AGENT_SECONDS", "") or "600"),
         max_findings=int(_env("MAX_FINDINGS", "") or "100"),
+        max_custom_rules=int(_env("MAX_CUSTOM_RULES", "") or "10"),
         reasoning_effort=_env("REASONING_EFFORT", "") or "medium",
         suggest_fixes=(_env("SUGGEST_FIXES", "") or "true").lower() == "true",
         custom_instructions=_env("CUSTOM_INSTRUCTIONS", ""),
@@ -186,6 +190,9 @@ def load_config() -> Config:
             logger.warning(f"Failed to load .pr-review.json: {e}")
 
     _apply_defaults(config)
+    if config.max_agent_tokens == 0:
+        # Recon + authoring + review is roughly 1.5-2x a plain review.
+        config.max_agent_tokens = 250_000 if config.agent_mode == "adaptive" else 150_000
     return config
 
 

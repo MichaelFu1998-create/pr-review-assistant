@@ -215,7 +215,7 @@ lines appear in the diff at all, not whether they were added or modified.
 
 | Input | Default | What to change it for |
 |---|---|---|
-| `agent_mode` | `agent` | `pipeline` runs the original non-agentic engine — cheapest, no fixes |
+| `agent_mode` | `agent` | `adaptive` reads the repo and writes rules for its own conventions (~1.5–2× cost); `pipeline` runs the original non-agentic engine |
 | `model` | `grok-4.6` | Any model on your chosen provider |
 | `reasoning_effort` | `medium` | `low` \| `medium` \| `high` \| `xhigh`. The real depth-vs-cost dial on `grok-4.6` |
 | `review_focus` | `all` | `security`, `quality`, `performance` |
@@ -437,9 +437,10 @@ Settings that belong to the project, so every workflow need not repeat them:
 | `temperature` | `1` | Dropped automatically if the model rejects it |
 | `max_tokens` | `32000` | Max tokens per LLM response |
 | `api_base_url` | — | Custom base URL for an OpenAI-compatible API |
-| `agent_mode` | `agent` | `agent` or `pipeline` |
+| `agent_mode` | `agent` | `agent`, `adaptive`, or `pipeline` |
+| `max_custom_rules` | `10` | Adaptive mode: cap on repository-specific rules authored |
 | `max_agent_steps` | `25` | Tool-calling turns before the agent must stop |
-| `max_agent_tokens` | `150000` | Token budget for one run |
+| `max_agent_tokens` | `150000` | Token budget for one run (`250000` in adaptive mode) |
 | `max_agent_seconds` | `600` | Wall-clock limit |
 | `max_findings` | `100` | Cap on findings recorded |
 | `suggest_fixes` | `true` | Render applyable GitHub suggestions |

@@ -86,6 +86,34 @@ def format_how_to_act(applyable: int, pr_url: str = "") -> list[str]:
     ]
 
 
+def format_custom_rules(rules: list) -> list[str]:
+    """Show the detectors the reviewer wrote for this repository.
+
+    Worth surfacing: it is the part of an adaptive review that is specific to
+    the project, and it makes the reviewer's judgement inspectable rather than
+    something that happened invisibly.
+    """
+    accepted = [r for r in rules if getattr(r, "valid", False)]
+    if not accepted:
+        return []
+
+    rows = [
+        "<details>",
+        f"<summary><b>Checks written for this repository ({len(accepted)})</b></summary>",
+        "",
+        "_The reviewer read this codebase and wrote these detectors for its own "
+        "conventions, on top of the standard rulesets._",
+        "",
+        "| Rule | Hits | Why |",
+        "|---|---|---|",
+    ]
+    for rule in accepted:
+        why = (rule.rationale or "").replace("|", "\\|").replace("\n", " ")[:140]
+        rows.append(f"| `{rule.rule_id}` | {rule.hits} | {why} |")
+    rows.extend(["", "</details>", ""])
+    return rows
+
+
 def format_analyser_table(findings: list[AgentFinding], limit: int = 40) -> list[str]:
     """Render analyser hits compactly, rather than as full finding bodies."""
     if not findings:
@@ -151,6 +179,7 @@ def build_review_body(
     analyser_findings: list[AgentFinding] | None = None,
     pr_url: str = "",
     sarif_enabled: bool = False,
+    custom_rules: list | None = None,
 ) -> str:
     """Assemble the review body posted above the inline comments."""
     parts = ["## Automated Code Review", ""]
@@ -207,6 +236,7 @@ def build_review_body(
                 location += f" line {finding.line}"
             parts.extend([f"**{location}**", "", format_finding_body(finding), "", "---", ""])
 
+    parts.extend(format_custom_rules(custom_rules or []))
     parts.extend(format_analyser_table(analyser_findings))
 
     if observations:

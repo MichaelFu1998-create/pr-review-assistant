@@ -16,6 +16,15 @@ SEVERITY_MAP = {
 }
 
 
+def _severity_filters(config: dict) -> list[str]:
+    """Explicit severity filters from .pr-review.json, if any."""
+    value = config.get("severity")
+    if not value:
+        return []
+    levels = value if isinstance(value, list) else [value]
+    return [str(v).strip().upper() for v in levels if str(v).strip()]
+
+
 class SemgrepTool(BaseTool):
     name = "semgrep"
     languages = [
@@ -37,15 +46,20 @@ class SemgrepTool(BaseTool):
 
     def run(self, files: list[str], workspace: str, config: dict) -> ToolResult:
         rulesets = config.get("rulesets", ["p/default"])
-        severity = config.get("severity", "INFO")
 
         cmd = [
             "semgrep",
             "--json",
-            "--severity", severity,
             "--no-git-ignore",
             "--quiet",
         ]
+        # --severity is a *filter*, not a floor: "report findings only from rules
+        # matching the supplied severity level". Defaulting it to INFO therefore
+        # suppressed every WARNING and ERROR rule, which is why semgrep reported
+        # nothing. Left unset, all severities come through and runner.py applies
+        # the real floor via severity_threshold. Honour it only when a repo asks.
+        for level in _severity_filters(config):
+            cmd.extend(["--severity", level])
         for ruleset in rulesets:
             cmd.extend(["--config", ruleset])
         cmd.extend(files)
