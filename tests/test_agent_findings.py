@@ -178,3 +178,42 @@ class TestMergeFindings:
 
     def test_empty_inputs(self):
         assert merge_findings([], []) == []
+
+
+class TestCustomRuleFindings:
+    """Hits from rules the reviewer authored read as its own findings, not as
+    raw analyser output."""
+
+    def _finding(self):
+        from src.agent.findings import CUSTOM_RULE_SOURCE
+
+        return Finding(
+            file="app/exports.py", line=29, severity="high", category="security",
+            rule_id="http-handler-missing-requires-scope",
+            message="Handler missing @requires_scope; every other route has one",
+            tool=CUSTOM_RULE_SOURCE,
+        )
+
+    def test_message_becomes_the_title_without_stuttering(self):
+        f = AgentFinding.from_tool_finding(self._finding())
+        assert f.title == "Handler missing @requires_scope; every other route has one"
+        assert f.title not in f.body
+
+    def test_body_names_the_rule(self):
+        f = AgentFinding.from_tool_finding(self._finding())
+        assert "http-handler-missing-requires-scope" in f.body
+        assert "written for this repository" in f.body
+
+    def test_confidence_is_high(self):
+        """The reviewer wrote the rule deliberately; 'medium confidence' would
+        misrepresent it."""
+        assert AgentFinding.from_tool_finding(self._finding()).confidence == "high"
+
+    def test_third_party_findings_are_unchanged(self):
+        f = AgentFinding.from_tool_finding(Finding(
+            file="a.py", line=1, severity="low", category="quality",
+            rule_id="E501", message="line too long", tool="ruff",
+        ))
+        assert f.title == "E501: line too long"
+        assert f.confidence == "medium"
+        assert f.source == "ruff"

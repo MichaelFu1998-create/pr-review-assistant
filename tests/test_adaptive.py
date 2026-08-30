@@ -322,3 +322,68 @@ class TestPhaseBudgets:
         run(context, script())
         # each phase sees less headroom than the one before it
         assert seen[0] >= seen[1] >= seen[2]
+
+
+class TestCustomRulesAreReviewerFindings:
+    """A rule the reviewer wrote is not third-party linter noise. Burying its
+    hits in the analyser table is why adaptive mode found a project-specific
+    defect on testbed#13 and the author saw nothing."""
+
+    def _with_hit(self, context, monkeypatch):
+        from src.tools.base import Finding, ToolResult
+
+        def fake(tool, files, workspace, config):
+            return ToolResult(tool_name="semgrep", findings=[
+                Finding(file="app.py", line=2, severity="high", category="security",
+                        rule_id="tmp.rules.route-missing-auth",
+                        message="Handler missing @requires_scope", tool="semgrep")
+            ])
+
+        monkeypatch.setattr(adaptive_module, "_run_single_tool", fake)
+
+    def test_custom_rule_hits_become_inline_comments(self, context, monkeypatch):
+        from src.output.comments import build_inline_comments, split_by_source
+
+        self._with_hit(context, monkeypatch)
+        # the review pass files nothing of its own
+        turns = [
+            turn(call("list_changed_files", _id="r1")),
+            turn(call("finish", _id="r2", summary="Flask app; routes use @requires_scope.")),
+            turn(call("write_rule", _id="w1", rule_yaml=RULE, rationale="convention")),
+            turn(call("finish", _id="w2", summary="one rule")),
+            turn(call("finish", _id="p1", summary="Nothing to add.")),
+        ]
+        result, _ = run(context, turns)
+
+        reviewer, analyser = split_by_source(result.findings)
+        assert [f.source for f in reviewer] == ["custom-rule"]
+        assert analyser == []
+        comments, _ = build_inline_comments(reviewer, context.diff)
+        assert len(comments) == 1, "a custom-rule hit must reach the author"
+
+    def test_third_party_analyser_output_still_stays_in_the_table(self, context, monkeypatch):
+        from src.output.comments import split_by_source
+        from src.tools.base import Finding
+
+        self._with_hit(context, monkeypatch)
+        context.tool_findings.append(
+            Finding(file="app.py", line=99, severity="low", category="quality",
+                    rule_id="E501", message="line too long", tool="ruff")
+        )
+        result, _ = run(context, script())
+        reviewer, analyser = split_by_source(result.findings)
+        assert "ruff" in [f.source for f in analyser]
+        assert "ruff" not in [f.source for f in reviewer]
+
+    def test_review_phase_is_briefed_about_custom_rule_hits(self, context, monkeypatch):
+        self._with_hit(context, monkeypatch)
+        _, llm = run(context, script())
+        review_kickoff = llm.calls[-1]["messages"][0].content
+        assert "About the custom-rule hits" in review_kickoff
+        assert "supersedes" in review_kickoff
+        assert "only what you actually filed" in review_kickoff
+
+    def test_no_briefing_when_no_rule_fired(self, context, monkeypatch):
+        monkeypatch.setattr(adaptive_module, "_run_custom_rules", lambda *a: None)
+        _, llm = run(context, script())
+        assert "About the custom-rule hits" not in llm.calls[-1]["messages"][0].content
