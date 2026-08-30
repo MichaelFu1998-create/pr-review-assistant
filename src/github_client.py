@@ -125,7 +125,14 @@ def safe_create_review(
     (no per-line positioning). The LLM feedback is preserved.
     """
     if not comments:
-        logger.info("No comments to post")
+        # No inline comments does not mean nothing to say: every finding may
+        # have been unanchorable, or the value may be in the summary, findings
+        # table and scores. Bailing here discarded the whole review.
+        if review_body and review_body.strip():
+            pull.create_review(body=review_body, event="COMMENT")
+            logger.info("Posted a summary-only review (no anchorable comments)")
+        else:
+            logger.info("Nothing to post: no comments and no review body")
         return
 
     try:
