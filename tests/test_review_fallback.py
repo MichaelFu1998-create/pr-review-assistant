@@ -146,10 +146,12 @@ def test_safe_create_review_reraises_non_422():
         safe_create_review(pull, "x", [{"path": "a.py", "position": 1, "body": "y"}])
 
 
-def test_safe_create_review_noop_on_empty_comments():
+def test_safe_create_review_posts_body_when_there_are_no_comments():
+    """Previously a no-op, which silently discarded the summary, findings table
+    and scores whenever no finding could be anchored to a diff line."""
     pull = MagicMock()
     safe_create_review(pull, "x", [])
-    pull.create_review.assert_not_called()
+    pull.create_review.assert_called_once_with(body="x", event="COMMENT")
 
 
 def test_summary_body_decodes_url_encoded_paths():
@@ -161,3 +163,24 @@ def test_summary_body_decodes_url_encoded_paths():
     )
     assert "src/app/[country]/page.tsx" in body
     assert "%5B" not in body
+
+
+def test_summary_only_review_is_still_posted():
+    """No inline comments does not mean nothing to say. Every finding may be
+    unanchorable, or the value may be in the summary, findings table and
+    scores — bailing here discarded the entire review."""
+    pull = MagicMock()
+    safe_create_review(pull, "## Automated Code Review\n\nFound 1 issue.", [])
+
+    pull.create_review.assert_called_once()
+    kwargs = pull.create_review.call_args.kwargs
+    assert kwargs["event"] == "COMMENT"
+    assert "Found 1 issue." in kwargs["body"]
+    assert "comments" not in kwargs
+
+
+def test_nothing_posted_when_there_is_genuinely_nothing():
+    pull = MagicMock()
+    safe_create_review(pull, "", [])
+    safe_create_review(pull, "   ", [])
+    pull.create_review.assert_not_called()
