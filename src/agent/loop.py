@@ -26,6 +26,10 @@ class AgentResult:
     scores: dict = field(default_factory=dict)
     budget: dict = field(default_factory=dict)
     stopped_because: str = "finished"
+    # Adaptive mode only: the rules the reviewer wrote for this repository, and
+    # the recon brief they came from. Empty in every other mode.
+    custom_rules: list = field(default_factory=list)
+    recon_brief: str = ""
 
 
 def run_agent(

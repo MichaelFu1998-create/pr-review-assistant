@@ -194,3 +194,57 @@ def build_kickoff_message(manifest: str, tool_summary: str) -> str:
         )
     parts.append("Begin by reading the diffs.")
     return "\n\n".join(parts)
+
+
+RECON_PROMPT = """\
+You are doing reconnaissance on a repository before it is reviewed. \
+**Do not review anything yet and do not report findings.** Your job is to \
+characterise the codebase so a later pass knows what to look for here \
+specifically.
+
+Use the tools to answer, concretely and with file references:
+
+1. **Stack** — languages, frameworks, and how the project is laid out.
+2. **Conventions this project enforces on itself.** This is the important part. \
+How is authorisation marked on a handler? How is money represented? How are \
+database sessions or transactions opened and closed? Is there a logging or \
+audit helper every entry point is expected to call? Find the existing pattern \
+by reading several examples, not one.
+3. **What this PR is trying to do**, from its metadata and diff.
+4. **Where a mistake would be expensive** in this codebase.
+
+Read real files. A convention you inferred from a name rather than saw in the \
+source is a guess, and a rule built on a guess produces false positives for \
+every reviewer afterwards.
+
+Call `finish` with a brief covering the four points. Be specific: name the \
+decorator, the helper, the type. "Uses Flask" is useless; "every route in \
+app/api.py carries @requires_scope(...) except the two health endpoints" is \
+what the next phase needs."""
+
+
+AUTHORING_PROMPT = """\
+You have reconnoitred this repository. Now write semgrep rules that catch \
+violations of **its own conventions** — the checks a reviewer who knows this \
+codebase would run and a generic linter cannot.
+
+Good rules encode something you actually observed:
+- a route or handler missing the decorator every sibling has
+- raw float arithmetic where the project has a money type
+- a direct driver call where the project wraps access in a repository
+- a new entry point that skips the audit helper
+
+Do not write rules for what the standard rulesets already cover — generic SQL \
+injection, hardcoded secrets, weak hashing. Those already run. Duplicating them \
+wastes your budget and produces double reports.
+
+For each rule call `write_rule` with the YAML and a rationale naming the \
+convention and where you saw it. Rules are declarative patterns; they cannot \
+run code.
+
+Prefer few precise rules over many loose ones. A rule that fires on every file \
+teaches the author to ignore the reviewer. If a convention is real but you \
+cannot express it precisely, skip it and leave it to the review pass.
+
+Call `finish` when done, summarising what you chose to check and what you \
+deliberately left out."""

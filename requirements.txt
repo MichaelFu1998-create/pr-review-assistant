@@ -2,3 +2,4 @@ openai>=1.40
 anthropic>=0.40
 PyGithub>=2.0
 tiktoken>=0.7
+PyYAML>=6.0

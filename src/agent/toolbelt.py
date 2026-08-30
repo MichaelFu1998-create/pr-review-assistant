@@ -20,6 +20,8 @@ from .budget import Budget
 from .context import ReviewContext
 from .findings import AgentFinding, FindingCollector
 from .fixes import rejection_feedback, validate_fix
+from .rules import RuleCollector, validate_rule
+from .rules import rejection_feedback as rule_rejection_feedback
 
 logger = logging.getLogger(__name__)
 
@@ -51,17 +53,63 @@ class Toolbelt:
         budget: Budget,
         source: str = "agent",
         suggest_fixes: bool = True,
+        rule_collector: "RuleCollector | None" = None,
     ):
         self.context = context
         self.collector = collector
         self.budget = budget
         self.suggest_fixes = suggest_fixes
+        # Present only in adaptive mode's authoring phase; when None the
+        # write_rule tool is not offered at all.
+        self.rule_collector = rule_collector
         # Labels each finding with what produced it: "agent" or an analyser name.
         self.source = source
 
     # --- schemas ---
 
     def schemas(self) -> list[ToolSchema]:
+        schemas = self._base_schemas()
+        if self.rule_collector is not None:
+            schemas.append(self._write_rule_schema())
+        return schemas
+
+    def _write_rule_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name="write_rule",
+            description=(
+                "Author one semgrep rule targeting a convention specific to THIS "
+                "repository — the auth decorator it actually uses, the money type "
+                "it actually requires, the helper every handler is expected to "
+                "call. Generic checks are already covered by the standard "
+                "rulesets; write what only someone who has read this codebase "
+                "would know to look for. Rules are declarative patterns and "
+                "cannot run code."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "rule_yaml": {
+                        "type": "string",
+                        "description": (
+                            "One semgrep rule as YAML, with id, message, severity "
+                            "(ERROR/WARNING/INFO), languages, and at least one "
+                            "pattern key. Either a bare mapping or a single-entry "
+                            "'rules:' list."
+                        ),
+                    },
+                    "rationale": {
+                        "type": "string",
+                        "description": (
+                            "What you saw in this repository that makes this rule "
+                            "worth running. Cite the convention and where you saw it."
+                        ),
+                    },
+                },
+                "required": ["rule_yaml", "rationale"],
+            },
+        )
+
+    def _base_schemas(self) -> list[ToolSchema]:
         return [
             ToolSchema(
                 name="list_changed_files",
@@ -597,6 +645,27 @@ class Toolbelt:
                     finding.fix, finding.path, self.context.diff
                 )
         return ToolOutcome(message)
+
+    def _tool_write_rule(self, args: dict) -> ToolOutcome:
+        if self.rule_collector is None:
+            return ToolOutcome("Error: rule authoring is not enabled for this phase.")
+
+        rule = validate_rule(
+            str(args.get("rule_yaml", "")),
+            self.rule_collector,
+            workspace=self.context.workspace,
+        )
+        rule.rationale = str(args.get("rationale", "")).strip()
+        self.rule_collector.add(rule)
+
+        if not rule.valid:
+            return ToolOutcome(rule_rejection_feedback(rule))
+
+        remaining = self.rule_collector.max_rules - len(self.rule_collector.accepted)
+        return ToolOutcome(
+            f"Rule '{rule.rule_id}' accepted ({remaining} slot(s) left). "
+            "It will run against the changed files before the review begins."
+        )
 
     def _tool_finish(self, args: dict) -> ToolOutcome:
         summary = str(args.get("summary", "")).strip()

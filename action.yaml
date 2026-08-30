@@ -20,9 +20,10 @@ inputs:
   # --- Agent settings (v2) ---
   agent_mode:
     description: >-
-      'agent' (default: an agent that investigates with tools and can propose
-      applyable fixes) or 'pipeline' (the original v1 engine: one single-shot
-      LLM call per file, no tools).
+      'agent' (default: investigates with tools and proposes applyable fixes),
+      'adaptive' (reads the repository first and writes semgrep rules for its
+      own conventions before reviewing — costs roughly 1.5-2x), or 'pipeline'
+      (the original v1 engine: one single-shot LLM call per file, no tools).
     required: false
     default: "agent"
   max_agent_steps:
@@ -30,9 +31,11 @@ inputs:
     required: false
     default: "25"
   max_agent_tokens:
-    description: "Token budget for one review run."
+    description: >-
+      Token budget for one review run. Empty uses the mode's default:
+      150000 for agent, 250000 for adaptive.
     required: false
-    default: "150000"
+    default: ""
   max_agent_seconds:
     description: "Wall-clock limit for one agent, in seconds."
     required: false
@@ -41,6 +44,12 @@ inputs:
     description: "Maximum findings recorded per agent."
     required: false
     default: "100"
+  max_custom_rules:
+    description: >-
+      Adaptive mode only: how many repository-specific semgrep rules the
+      reviewer may author.
+    required: false
+    default: "10"
   suggest_fixes:
     description: >-
       Render high-confidence fixes as GitHub suggested changes, so the author
@@ -173,6 +182,7 @@ runs:
     INPUT_MAX_AGENT_TOKENS: ${{ inputs.max_agent_tokens }}
     INPUT_MAX_AGENT_SECONDS: ${{ inputs.max_agent_seconds }}
     INPUT_MAX_FINDINGS: ${{ inputs.max_findings }}
+    INPUT_MAX_CUSTOM_RULES: ${{ inputs.max_custom_rules }}
     INPUT_SUGGEST_FIXES: ${{ inputs.suggest_fixes }}
     INPUT_LLM_PROVIDER: ${{ inputs.llm_provider }}
     INPUT_MODEL: ${{ inputs.model }}
