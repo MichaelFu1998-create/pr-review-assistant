@@ -694,7 +694,19 @@ class Toolbelt:
             return None
         # git grep exits 1 for "no matches", which is a result, not a failure.
         if proc.returncode not in (0, 1):
-            logger.info("git %s exited %d: %s", cmd[1], proc.returncode, proc.stderr[:200])
+            stderr = (proc.stderr or "").strip()
+            if "dubious ownership" in stderr:
+                # entrypoint.sh marks the workspace safe; if that did not run,
+                # every git-backed tool fails and the agent silently loses the
+                # ability to search the repository.
+                logger.error(
+                    "git refused the workspace (dubious ownership). search_repo, "
+                    "find_symbol and git_log are unavailable for this run."
+                )
+            else:
+                logger.info(
+                    "git %s exited %d: %s", cmd[1], proc.returncode, stderr[:200]
+                )
             if not proc.stdout:
                 return None
         return proc.stdout
