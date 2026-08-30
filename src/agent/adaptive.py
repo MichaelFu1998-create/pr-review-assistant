@@ -55,6 +55,9 @@ def run_adaptive_agent(
     result = _review(llm, llm_config, config, context, budget)
     result.custom_rules = rules
     result.recon_brief = brief
+    # Report the whole run, not just the review phase: the footer's step and
+    # token counts must account for recon and authoring too.
+    result.budget = budget.summary()
     return result
 
 
@@ -189,10 +192,17 @@ def _run_custom_rules(rules: list[CustomRule], context: ReviewContext) -> None:
 
 
 def _review(llm, llm_config, config: Config, context: ReviewContext, budget: Budget) -> AgentResult:
-    """Phase 3 — the standard review, now with custom-rule hits as evidence."""
+    """Phase 3 — the standard review, now with custom-rule hits as evidence.
+
+    Gets its own step allowance rather than whatever recon and authoring left
+    over. Steps bound how deep a single agent can go, so spending them on recon
+    should not shorten the review; tokens are what bound the run's total cost,
+    and those are still shared.
+    """
+    phase = _phase_budget(budget, config.max_agent_steps)
     collector = FindingCollector(max_findings=config.max_findings)
     toolbelt = Toolbelt(
-        context, collector, budget, source="agent",
+        context, collector, phase, source="agent",
         suggest_fixes=config.suggest_fixes,
     )
 
@@ -206,7 +216,8 @@ def _review(llm, llm_config, config: Config, context: ReviewContext, budget: Bud
         ),
         toolbelt=toolbelt,
         collector=collector,
-        budget=budget,
+        budget=phase,
     )
+    _absorb(budget, phase)
     result.findings = merge_findings(result.findings, context.tool_findings)
     return result

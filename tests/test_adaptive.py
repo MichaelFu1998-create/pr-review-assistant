@@ -279,3 +279,46 @@ class TestDegradedRuns:
         # recon 2 + authoring 2 + review 2
         assert result.budget["steps"] >= 6
         assert result.budget["total_tokens"] > 0
+
+
+class TestPhaseBudgets:
+    def test_review_gets_a_full_step_allowance(self, context, monkeypatch):
+        """Recon and authoring must not shorten the review. Steps bound depth
+        per phase; tokens bound the run's total cost."""
+        monkeypatch.setattr(adaptive_module, "_run_custom_rules", lambda *a: None)
+        seen = []
+
+        real = adaptive_module.run_agent
+
+        def capture(**kwargs):
+            seen.append(kwargs["budget"].max_steps)
+            return real(**kwargs)
+
+        monkeypatch.setattr(adaptive_module, "run_agent", capture)
+        run(context, script(), config=Config(agent_mode="adaptive", max_agent_steps=25))
+
+        recon_steps, authoring_steps, review_steps = seen
+        assert recon_steps == adaptive_module.RECON_STEPS
+        assert authoring_steps == adaptive_module.AUTHORING_STEPS
+        assert review_steps == 25, "review must get its own full allowance"
+
+    def test_reported_budget_covers_the_whole_run(self, context, monkeypatch):
+        monkeypatch.setattr(adaptive_module, "_run_custom_rules", lambda *a: None)
+        result, _ = run(context, script())
+        # recon 2 + authoring 2 + review 2, not just the review phase
+        assert result.budget["steps"] >= 6
+
+    def test_token_budget_is_shared_across_phases(self, context, monkeypatch):
+        monkeypatch.setattr(adaptive_module, "_run_custom_rules", lambda *a: None)
+        seen = []
+
+        real = adaptive_module.run_agent
+
+        def capture(**kwargs):
+            seen.append(kwargs["budget"].max_tokens)
+            return real(**kwargs)
+
+        monkeypatch.setattr(adaptive_module, "run_agent", capture)
+        run(context, script())
+        # each phase sees less headroom than the one before it
+        assert seen[0] >= seen[1] >= seen[2]
