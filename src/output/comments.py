@@ -12,7 +12,7 @@ saying.
 import logging
 from urllib.parse import quote
 
-from ..agent.findings import AgentFinding
+from ..agent.findings import CUSTOM_RULE_SOURCE, AgentFinding
 from ..diff.patch import DiffMap
 
 logger = logging.getLogger(__name__)
@@ -60,23 +60,32 @@ def format_finding_body(finding: AgentFinding) -> str:
 
 
 def is_agent_finding(finding: AgentFinding) -> bool:
-    """True for findings the agent reasoned about, false for raw analyser hits."""
-    return finding.source == "agent"
+    """True for findings the reviewer stands behind.
+
+    That means its own findings, and hits from rules it authored for this
+    repository in adaptive mode. Both are reasoned; a custom rule carries a
+    rationale explaining the convention it encodes. Third-party analyser output
+    is not — the reviewer validates that and re-reports what matters.
+    """
+    return finding.source in ("agent", CUSTOM_RULE_SOURCE)
 
 
 def split_by_source(
     findings: list[AgentFinding],
 ) -> tuple[list[AgentFinding], list[AgentFinding]]:
-    """Partition into (agent findings, analyser findings).
+    """Partition into (reviewer findings, third-party analyser findings).
 
-    Only the agent's findings become inline comments. The agent is prompted to
-    validate analyser output and re-report the real hits in its own words with
-    an explanation, so posting both would comment twice on the same line — once
-    with reasoning, once with a rule id.
+    Only reviewer findings become inline comments. Raw analyser output would
+    comment twice on the same line — once with reasoning, once with a rule id —
+    and includes hits the reviewer judged false positives.
+
+    Rules the reviewer authored itself are on the reviewer's side of that line:
+    burying them in a table was the whole reason adaptive mode found a
+    project-specific defect and the author never saw it.
     """
-    agent = [f for f in findings if is_agent_finding(f)]
+    reviewer = [f for f in findings if is_agent_finding(f)]
     analyser = [f for f in findings if not is_agent_finding(f)]
-    return agent, analyser
+    return reviewer, analyser
 
 
 def _format_fix(finding: AgentFinding) -> list[str]:

@@ -39,6 +39,11 @@ CATEGORIES = (
 
 DEFAULT_CATEGORY = "correctness"
 
+# Findings from rules the reviewer authored for this repository (adaptive mode).
+# Distinct from third-party analyser output: these are the reviewer's own
+# reasoned detectors, so they are reported like its own findings.
+CUSTOM_RULE_SOURCE = "custom-rule"
+
 # Maps the categories the existing static-analysis tools emit onto ours.
 TOOL_CATEGORY_MAP = {
     "security": "security",
@@ -134,6 +139,27 @@ class AgentFinding:
     @classmethod
     def from_tool_finding(cls, finding: Finding) -> "AgentFinding":
         """Lift a static-analysis Finding into the same shape."""
+        if finding.tool == CUSTOM_RULE_SOURCE:
+            # A rule the reviewer wrote: its `message` is already a written
+            # explanation, so using it as both title and body reads as a stutter.
+            # Confidence is high because the reviewer authored the rule
+            # deliberately after reading this codebase.
+            return cls(
+                path=finding.file,
+                title=finding.message[:200],
+                body=(
+                    f"Matched `{finding.rule_id}`, a rule written for this "
+                    "repository after reading its conventions."
+                ),
+                line=finding.line,
+                severity=normalize_severity(finding.severity),
+                category=TOOL_CATEGORY_MAP.get(finding.category, DEFAULT_CATEGORY),
+                cwe=normalize_cwe(finding.rule_id),
+                confidence="high",
+                evidence=[f"{CUSTOM_RULE_SOURCE}:{finding.rule_id}"],
+                source=CUSTOM_RULE_SOURCE,
+            )
+
         return cls(
             path=finding.file,
             title=f"{finding.rule_id}: {finding.message}"[:200] if finding.rule_id else finding.message[:200],

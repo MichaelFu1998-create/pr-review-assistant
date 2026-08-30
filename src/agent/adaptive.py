@@ -18,7 +18,7 @@ from ..tools.registry import discover_tools
 from ..tools.runner import _run_single_tool
 from .budget import Budget
 from .context import ReviewContext
-from .findings import FindingCollector, merge_findings
+from .findings import CUSTOM_RULE_SOURCE, FindingCollector, merge_findings
 from .loop import AgentResult, run_agent
 from .prompts import AUTHORING_PROMPT, RECON_PROMPT, build_kickoff_message, build_system_prompt
 from .rules import CustomRule, RuleCollector, write_rules_file
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 RECON_STEPS = 10
 AUTHORING_STEPS = 8
 
-CUSTOM_TOOL_NAME = "custom-rule"
+CUSTOM_TOOL_NAME = CUSTOM_RULE_SOURCE
 
 
 def run_adaptive_agent(
@@ -206,14 +206,32 @@ def _review(llm, llm_config, config: Config, context: ReviewContext, budget: Bud
         suggest_fixes=config.suggest_fixes,
     )
 
+    kickoff = build_kickoff_message(
+        manifest=context.manifest(),
+        tool_summary=format_findings_for_prompt(context.tool_findings),
+    )
+    if any(f.tool == CUSTOM_TOOL_NAME for f in context.tool_findings):
+        # Without this the reviewer treats a custom-rule hit as "already
+        # handled" and files nothing, then writes "Filed: ..." in its summary —
+        # so the author sees a claim with no comment and no fix behind it.
+        kickoff += (
+            "\n\n## About the custom-rule hits\n\n"
+            "Rules you wrote for this repository have already fired, and each "
+            "hit is reported to the author on its own. You do not need to "
+            "repeat one.\n\n"
+            "But a rule can only point at a line. If you can add something a "
+            "pattern cannot — why it matters here, the blast radius, or an "
+            "applyable fix — then call `post_finding` at the same line. Yours "
+            "supersedes the rule's.\n\n"
+            "Whatever you decide, your summary must describe only what you "
+            "actually filed. Do not write that you filed something you did not."
+        )
+
     result = run_agent(
         llm=llm,
         llm_config=llm_config,
         system_prompt=build_system_prompt(config),
-        kickoff=build_kickoff_message(
-            manifest=context.manifest(),
-            tool_summary=format_findings_for_prompt(context.tool_findings),
-        ),
+        kickoff=kickoff,
         toolbelt=toolbelt,
         collector=collector,
         budget=phase,
