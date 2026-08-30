@@ -170,8 +170,15 @@ def _run_custom_rules(rules: list[CustomRule], context: ReviewContext) -> None:
     for finding in result.findings:
         # Distinguish these from the standard rulesets in every report.
         finding.tool = CUSTOM_TOOL_NAME
-        matched = by_id.get(finding.rule_id)
+        # Semgrep namespaces rule ids by the config file's path, so a rule
+        # written to /tmp/pr-review-rules-xyz/adaptive-rules.yaml comes back as
+        # "tmp.pr-review-rules-xyz.adaptive-rules.<id>". Strip that back to the
+        # authored id: otherwise hit counts never match and the temp path leaks
+        # into comments, SARIF, and the Security tab.
+        short_id = finding.rule_id.rsplit(".", 1)[-1]
+        matched = by_id.get(short_id)
         if matched:
+            finding.rule_id = short_id
             matched.hits += 1
 
     if result.findings:

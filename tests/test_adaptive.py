@@ -210,19 +210,43 @@ class TestCustomRuleExecution:
         assert seen["config"]["rulesets"][0].endswith("adaptive-rules.yaml")
 
     def test_hits_are_tagged_and_counted(self, context, monkeypatch):
+        """Semgrep namespaces rule ids by the config file's path, so the id it
+        reports is not the id that was authored. Regression for hit counts that
+        always read 0 while the rules were in fact firing."""
         from src.tools.base import Finding, ToolResult
 
         def fake(tool, files, workspace, config):
             return ToolResult(tool_name="semgrep", findings=[
-                Finding(file="app.py", line=2, severity="high", category="security",
-                        rule_id="route-missing-auth", message="no auth", tool="semgrep")
+                Finding(
+                    file="app.py", line=2, severity="high", category="security",
+                    # exactly the shape semgrep returns for a file-based config
+                    rule_id="tmp.pr-review-rules-abc123.adaptive-rules.route-missing-auth",
+                    message="no auth", tool="semgrep",
+                )
             ])
 
         monkeypatch.setattr(adaptive_module, "_run_single_tool", fake)
         result, _ = run(context, script())
 
         assert context.tool_findings[0].tool == "custom-rule"
+        # the temp path must not leak into comments, SARIF, or the Security tab
+        assert context.tool_findings[0].rule_id == "route-missing-auth"
         assert [r.hits for r in result.custom_rules if r.valid] == [1]
+
+    def test_unrelated_rule_ids_are_left_alone(self, context, monkeypatch):
+        from src.tools.base import Finding, ToolResult
+
+        def fake(tool, files, workspace, config):
+            return ToolResult(tool_name="semgrep", findings=[
+                Finding(file="app.py", line=2, severity="low", category="security",
+                        rule_id="python.lang.security.some-builtin-rule",
+                        message="x", tool="semgrep")
+            ])
+
+        monkeypatch.setattr(adaptive_module, "_run_single_tool", fake)
+        result, _ = run(context, script())
+        assert context.tool_findings[0].rule_id == "python.lang.security.some-builtin-rule"
+        assert [r.hits for r in result.custom_rules if r.valid] == [0]
 
     def test_no_rules_means_semgrep_is_not_run(self, context, monkeypatch):
         called = {"n": 0}
