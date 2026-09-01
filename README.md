@@ -39,9 +39,10 @@ It reads your diff, investigates the surrounding code, and proposes fixes you ap
 
 ### How it works
 
-- [6. Two engines](#6-two-engines)
+- [6. The three modes](#6-the-three-modes)
   - [6.1 `pipeline` — the original design](#61-pipeline--the-original-design)
   - [6.2 `agent` — the default](#62-agent--the-default)
+  - [6.3 `adaptive` — beta](#63-adaptive--beta)
 - [7. Why structured findings matter](#7-why-structured-findings-matter)
 - [8. The agent loop](#8-the-agent-loop)
 - [9. The toolbelt](#9-the-toolbelt)
@@ -215,7 +216,7 @@ lines appear in the diff at all, not whether they were added or modified.
 
 | Input | Default | What to change it for |
 |---|---|---|
-| `agent_mode` | `agent` | `adaptive` reads the repo and writes rules for its own conventions (~1.5–2× cost); `pipeline` runs the original non-agentic engine |
+| `agent_mode` | `agent` | `adaptive` **(beta)** reads the repo and writes rules for its own conventions (~1.5–2× cost); `pipeline` runs the original non-agentic engine |
 | `model` | `grok-4.6` | Any model on your chosen provider |
 | `reasoning_effort` | `medium` | `low` \| `medium` \| `high` \| `xhigh`. The real depth-vs-cost dial on `grok-4.6` |
 | `review_focus` | `all` | `security`, `quality`, `performance` |
@@ -417,8 +418,8 @@ Settings that belong to the project, so every workflow need not repeat them:
 | `temperature` | `1` | Dropped automatically if the model rejects it |
 | `max_tokens` | `32000` | Max tokens per LLM response |
 | `api_base_url` | — | Custom base URL for an OpenAI-compatible API |
-| `agent_mode` | `agent` | `agent`, `adaptive`, or `pipeline` |
-| `max_custom_rules` | `10` | Adaptive mode: cap on repository-specific rules authored |
+| `agent_mode` | `agent` | `agent`, `adaptive` **(beta)**, or `pipeline` |
+| `max_custom_rules` | `10` | Adaptive mode **(beta)**: cap on repository-specific rules authored |
 | `max_agent_steps` | `25` | Tool-calling turns before the agent must stop |
 | `max_agent_tokens` | `150000` | Token budget for one run (`250000` in adaptive mode) |
 | `max_agent_seconds` | `600` | Wall-clock limit |
@@ -476,7 +477,7 @@ the vulnerability classes this reviewer is built to catch.
 Everything above is how to *use* it. The rest is how it works inside — useful if
 you want to extend it, or to understand what "agentic" actually buys.
 
-## 6. Two engines
+## 6. The three modes
 
 ### 6.1 `pipeline` — the original design
 
@@ -512,6 +513,48 @@ flowchart TD
     E --> I[exit code]
 
     style D fill:#2d6a4f,color:#fff
+```
+
+### 6.3 `adaptive` — beta
+
+`agent` mode brings the same checks to every repository. It cannot know that
+*your* project marks authorisation with `@requires_scope`, or that money must go
+through `Money.from_cents`. `adaptive` reads the codebase first and writes
+detectors for what it finds:
+
+```mermaid
+flowchart LR
+    A[recon:<br/>read the repo] --> B[author semgrep rules<br/>for its conventions]
+    B --> C[run them]
+    C --> D[the normal review]
+
+    style B fill:#7f5539,color:#fff
+```
+
+The rules are **semgrep patterns, not code** — declarative YAML run by semgrep's
+own engine. Nothing the model writes is executed. That matters because the action
+holds your `GITHUB_TOKEN` and API keys while reviewing untrusted pull requests.
+
+> [!WARNING]
+> **Beta.** It works, and it finds project-specific defects that no generic
+> ruleset catches. But it is newer and less proven than `agent` mode:
+>
+> - **It can write a rule that produces false positives.** In testing it wrote a
+>   decorator-ordering rule that flagged code already matching the convention it
+>   was enforcing. There is no check yet that a rule stays quiet on code the
+>   project already accepts.
+> - **It costs roughly 2× and takes 2–4× longer** — around 107k tokens and 380s
+>   versus 48k and 81s for `agent` mode on the same diff.
+> - **It has produced fewer applyable fixes** than `agent` mode in
+>   side-by-side runs.
+>
+> Use `agent` for coursework and anything that matters. Reach for `adaptive`
+> when a project has strong internal conventions worth encoding, and read its
+> rules — the review lists every one it wrote.
+
+```yaml
+  agent_mode: adaptive
+  max_custom_rules: "10"
 ```
 
 ## 7. Why structured findings matter
@@ -580,6 +623,7 @@ summarise what it already found.
 ## 9. The toolbelt
 
 All twelve are **read-only**. The agent inspects; it never writes to your repo.
+(Adaptive mode adds a thirteenth, `write_rule`, during its authoring phase.)
 
 | Tool | Why the agent needs it |
 |---|---|
@@ -730,7 +774,9 @@ src/
 │   ├── fixes.py        Applyable fixes and their validation
 │   ├── context.py      What the agent is allowed to see
 │   ├── prompts.py      What the agent is told to look for
-│   └── single.py       The agent entry point
+│   ├── single.py       The agent entry point
+│   ├── adaptive.py     Beta: recon → author rules → review
+│   └── rules.py        Validation keeping authored rules declarative
 ├── prompt/             The v1 pipeline's prompt construction
 ├── tools/analyzers/    13 static analysers
 └── output/             comments · sarif · json_report · gating · summary
