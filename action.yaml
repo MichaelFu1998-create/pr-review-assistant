@@ -64,8 +64,8 @@ inputs:
     default: "xai"
   model:
     description: >-
-      Model name for whichever provider is selected (e.g. grok-4.6,
-      gpt-5.4-mini-2026-03-17, claude-sonnet-4-6). Defaults to grok-4.6.
+      Model ID for the selected provider. Defaults to grok-4.20-0309-non-reasoning.
+      Keys restricted to that model must use this exact ID; no alternate-model fallback.
     required: false
     default: ""
   temperature:
@@ -78,11 +78,11 @@ inputs:
     default: ""
   reasoning_effort:
     description: >-
-      Depth/cost dial for reasoning models such as grok-4.6:
-      low, medium, high, or xhigh. Dropped automatically on models that
-      do not accept it.
+      Optional depth/cost dial for reasoning models: low, medium, high, or
+      xhigh. Leave empty for the default non-reasoning model. Dropped
+      automatically on models that do not accept it.
     required: false
-    default: "medium"
+    default: ""
   api_base_url:
     description: "Custom base URL for an OpenAI-compatible API (Ollama, vLLM, Azure)"
     required: false

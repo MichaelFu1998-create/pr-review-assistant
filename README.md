@@ -127,10 +127,16 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           github_pr_id: ${{ github.event.pull_request.number }}
           xai_api_key: ${{ secrets.XAI_API_KEY }}
+          model: grok-4.20-0309-non-reasoning
 ```
 
-That's the whole configuration. It defaults to `grok-4.6` in agent mode with
-suggested fixes on.
+That's the whole configuration. It defaults to `grok-4.20-0309-non-reasoning` in agent mode with
+suggested fixes on. Keep the existing `XAI_API_KEY` secret unchanged. If the key
+is restricted to this model, use the exact ID shown above: aliases and other
+models will fail. Update any existing `model` or deprecated `openai_model`
+override to this ID (or remove the override to use the default). Empty model
+inputs fall back to the same ID, and API retries never switch models.
+`reasoning_effort` is empty by default and is omitted from requests.
 
 Two details that are easy to miss:
 
@@ -165,7 +171,7 @@ And a summary comment carries a severity table, optional scores, and a footer
 showing how much the run cost:
 
 ```
-mode: agent · model: grok-4.6 · 2 applyable fix(es) · 12 steps · 48,000 tokens · 34s
+mode: agent · model: grok-4.20-0309-non-reasoning · 2 applyable fix(es) · 12 steps · 48,000 tokens · 34s
 ```
 
 If that footer says **stopped early**, the agent hit a budget limit and the
@@ -217,8 +223,8 @@ lines appear in the diff at all, not whether they were added or modified.
 | Input | Default | What to change it for |
 |---|---|---|
 | `agent_mode` | `agent` | `adaptive` **(beta)** reads the repo and writes rules for its own conventions (~1.5–2× cost); `pipeline` runs the original non-agentic engine |
-| `model` | `grok-4.6` | Any model on your chosen provider |
-| `reasoning_effort` | `medium` | `low` \| `medium` \| `high` \| `xhigh`. The real depth-vs-cost dial on `grok-4.6` |
+| `model` | `grok-4.20-0309-non-reasoning` | Any model on your chosen provider |
+| `reasoning_effort` | — | Optional for reasoning models; leave empty for the default non-reasoning model |
 | `review_focus` | `all` | `security`, `quality`, `performance` |
 | `max_agent_steps` | `25` | Lower to cap cost, raise if reviews stop early |
 | `max_agent_tokens` | `150000` | Hard token ceiling per run |
@@ -244,7 +250,7 @@ lines appear in the diff at all, not whether they were added or modified.
 **Keep costs down**
 
 ```yaml
-  reasoning_effort: low
+  model: grok-4.20-0309-non-reasoning
   max_agent_steps: "12"
   max_agent_tokens: "60000"
   files: "src/**"
@@ -286,6 +292,9 @@ missed warning.
   model: llama3
 ```
 
+The alternative-provider examples require a separate key with access to the
+selected model; they cannot use the restricted `XAI_API_KEY`.
+
 `model` names the model for *every* provider. The `*_api_key` inputs stay
 provider-specific, because those genuinely are per-provider.
 
@@ -314,6 +323,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           github_pr_id: ${{ github.event.pull_request.number }}
           xai_api_key: ${{ secrets.XAI_API_KEY }}
+          model: grok-4.20-0309-non-reasoning
           output_sarif: pr-review.sarif
 
       - uses: github/codeql-action/upload-sarif@v3
@@ -364,6 +374,7 @@ over-long line — should not become a security alert.
           github_token: ${{ secrets.GITHUB_TOKEN }}
           github_pr_id: ${{ github.event.pull_request.number }}
           xai_api_key: ${{ secrets.XAI_API_KEY }}
+          model: grok-4.20-0309-non-reasoning
           output_json: review.json
 
       - uses: actions/upload-artifact@v4
@@ -413,8 +424,8 @@ Settings that belong to the project, so every workflow need not repeat them:
 | `openai_api_key` | — | OpenAI key |
 | `anthropic_api_key` | — | Anthropic key |
 | `llm_provider` | `xai` | `xai`, `openai`, `anthropic` |
-| `model` | `grok-4.6` | Model name, for whichever provider is selected |
-| `reasoning_effort` | `medium` | `low`/`medium`/`high`/`xhigh`. Dropped automatically on models that do not accept it |
+| `model` | `grok-4.20-0309-non-reasoning` | Model name, for whichever provider is selected |
+| `reasoning_effort` | — | Optional `low`/`medium`/`high`/`xhigh` for reasoning models. Omitted by default; dropped if rejected |
 | `temperature` | `1` | Dropped automatically if the model rejects it |
 | `max_tokens` | `32000` | Max tokens per LLM response |
 | `api_base_url` | — | Custom base URL for an OpenAI-compatible API |
@@ -822,6 +833,7 @@ variables, which is all the Docker entrypoint does:
 export INPUT_GITHUB_TOKEN="ghp_..."
 export INPUT_GITHUB_PR_ID="123"
 export INPUT_XAI_API_KEY="xai-..."
+export INPUT_MODEL="grok-4.20-0309-non-reasoning"
 export INPUT_TOOLS="none"        # skip analysers for a quick loop
 export INPUT_LOGGING="debug"     # full prompts, tool output, token counts
 export GITHUB_REPOSITORY="your-org/your-repo"
@@ -836,7 +848,7 @@ python -m src.main
 docker build -t pr-review-test .
 docker run --rm \
   -e INPUT_GITHUB_TOKEN -e INPUT_GITHUB_PR_ID -e INPUT_XAI_API_KEY \
-  -e INPUT_TOOLS=none -e INPUT_LOGGING=debug \
+  -e INPUT_MODEL -e INPUT_TOOLS=none -e INPUT_LOGGING=debug \
   -e GITHUB_REPOSITORY -e GITHUB_WORKSPACE=/workspace \
   -v "$(pwd):/workspace" pr-review-test
 ```

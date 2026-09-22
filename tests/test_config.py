@@ -154,7 +154,7 @@ class TestProviderNeutralNames:
 
     def test_defaults(self, workspace):
         config = load_config()
-        assert config.model == "grok-4.6"
+        assert config.model == "grok-4.20-0309-non-reasoning"
         assert config.temperature == 1.0
         assert config.max_tokens == 32000
 
@@ -169,19 +169,19 @@ class TestProviderNeutralNames:
         assert config.max_tokens == 4096
 
     def test_legacy_name_warns(self, workspace, monkeypatch, caplog):
-        monkeypatch.setenv("INPUT_OPENAI_MODEL", "grok-4.6")
+        monkeypatch.setenv("INPUT_OPENAI_MODEL", "grok-4.20-0309-non-reasoning")
         with caplog.at_level("WARNING"):
             load_config()
         assert "deprecated" in caplog.text
         assert "openai_model" in caplog.text and "'model'" in caplog.text
 
     def test_new_name_wins_over_legacy(self, workspace, monkeypatch):
-        monkeypatch.setenv("INPUT_MODEL", "grok-4.6")
+        monkeypatch.setenv("INPUT_MODEL", "grok-4.20-0309-non-reasoning")
         monkeypatch.setenv("INPUT_OPENAI_MODEL", "gpt-4o")
-        assert load_config().model == "grok-4.6"
+        assert load_config().model == "grok-4.20-0309-non-reasoning"
 
     def test_new_name_does_not_warn(self, workspace, monkeypatch, caplog):
-        monkeypatch.setenv("INPUT_MODEL", "grok-4.6")
+        monkeypatch.setenv("INPUT_MODEL", "grok-4.20-0309-non-reasoning")
         with caplog.at_level("WARNING"):
             load_config()
         assert "deprecated" not in caplog.text
@@ -198,16 +198,16 @@ class TestProviderNeutralNames:
 
 
 class TestReasoningEffort:
-    def test_defaults_to_medium(self, workspace):
-        assert load_config().reasoning_effort == "medium"
+    def test_defaults_to_no_reasoning_effort(self, workspace):
+        assert load_config().reasoning_effort == ""
 
     def test_explicit_value_wins(self, workspace, monkeypatch):
         monkeypatch.setenv("INPUT_REASONING_EFFORT", "high")
         assert load_config().reasoning_effort == "high"
 
-    def test_empty_input_falls_back_to_medium(self, workspace, monkeypatch):
+    def test_empty_input_omits_reasoning_effort(self, workspace, monkeypatch):
         monkeypatch.setenv("INPUT_REASONING_EFFORT", "")
-        assert load_config().reasoning_effort == "medium"
+        assert load_config().reasoning_effort == ""
 
 
 class TestNoPersonas:

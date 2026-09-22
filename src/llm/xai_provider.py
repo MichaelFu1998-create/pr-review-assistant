@@ -17,15 +17,14 @@ XAI_BASE_URL = "https://api.x.ai/v1"
 # OpenAIProvider.max_context_tokens' conservative default rather than
 # over-promising a window the model does not have.
 #
-# grok-4.6 genuinely accepts 500K, but this table is what the prompt budgeter
-# spends against (src/prompt/builder.py:54) and what bounds an agent run. Long
-# context is the main thing that makes an agentic review expensive, so the
-# advertised window is capped well under the real one — these run on a shared
-# class API key. Raise it deliberately, not by accident.
-GROK_46_CONTEXT_CAP = 180_000
+# Keep the default model under the existing 180K prompt budget cap. Long
+# contexts make reviews expensive on a shared API key; changing the model
+# must not silently expand that budget.
+DEFAULT_XAI_CONTEXT_CAP = 180_000
 
 MODEL_CONTEXT_SIZES = {
-    "grok-4.6": GROK_46_CONTEXT_CAP,
+    "grok-4.20-0309-non-reasoning": DEFAULT_XAI_CONTEXT_CAP,
+    "grok-4.6": 180_000,
     "grok-4": 256_000,
     "grok-4-fast": 2_000_000,
     "grok-4-fast-reasoning": 2_000_000,

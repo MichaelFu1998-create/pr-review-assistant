@@ -28,7 +28,9 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - name: Lint
         run: ruff check src/ tests/ --select F,E9
-      - name: Test
+      - name: Test (including exact xAI request model)
+        env:
+          INPUT_MODEL: grok-4.20-0309-non-reasoning
         run: pytest tests/ -q
 
   action-image:

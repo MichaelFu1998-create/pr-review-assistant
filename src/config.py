@@ -17,7 +17,7 @@ class Config:
 
     # LLM settings
     llm_provider: str = "xai"
-    model: str = "grok-4.6"
+    model: str = "grok-4.20-0309-non-reasoning"
     temperature: float = 1.0
     max_tokens: int = 32000
     api_base_url: str = ""
@@ -39,7 +39,7 @@ class Config:
     max_agent_seconds: float = 600.0
     max_findings: int = 100
     max_custom_rules: int = 10           # adaptive mode: cap on authored rules
-    reasoning_effort: str = "medium"     # reasoning models: low|medium|high|xhigh
+    reasoning_effort: str = ""           # optional for reasoning models
     suggest_fixes: bool = True           # render applyable GitHub suggestions
 
     # Review settings
@@ -149,7 +149,7 @@ def load_config() -> Config:
         github_token=_env("GITHUB_TOKEN"),
         github_pr_id=int(_env("GITHUB_PR_ID", "0") or "0"),
         llm_provider=_env("LLM_PROVIDER", "") or "xai",
-        model=_renamed("MODEL", "OPENAI_MODEL") or "grok-4.6",
+        model=_renamed("MODEL", "OPENAI_MODEL") or "grok-4.20-0309-non-reasoning",
         temperature=float(_renamed("TEMPERATURE", "OPENAI_TEMPERATURE") or "1"),
         max_tokens=int(_renamed("MAX_TOKENS", "OPENAI_MAX_TOKENS") or "32000"),
         api_base_url=_env("API_BASE_URL", ""),
@@ -162,7 +162,7 @@ def load_config() -> Config:
         max_agent_seconds=float(_env("MAX_AGENT_SECONDS", "") or "600"),
         max_findings=int(_env("MAX_FINDINGS", "") or "100"),
         max_custom_rules=int(_env("MAX_CUSTOM_RULES", "") or "10"),
-        reasoning_effort=_env("REASONING_EFFORT", "") or "medium",
+        reasoning_effort=_env("REASONING_EFFORT", ""),
         suggest_fixes=(_env("SUGGEST_FIXES", "") or "true").lower() == "true",
         custom_instructions=_env("CUSTOM_INSTRUCTIONS", ""),
         output_sarif=_env("OUTPUT_SARIF", ""),

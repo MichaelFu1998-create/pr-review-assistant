@@ -22,11 +22,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class LLMConfig:
-    model: str = "grok-4.6"
+    model: str = "grok-4.20-0309-non-reasoning"
     temperature: float = 1.0
     max_tokens: int = 32000
-    # Reasoning models (grok-4.6, the gpt-5/o-series) take a depth dial instead
-    # of a temperature. Sent only when set.
+    # Optional depth dial for reasoning models. Unset for the default
+    # non-reasoning model; sent only when explicitly configured.
     reasoning_effort: str = ""
 
 
